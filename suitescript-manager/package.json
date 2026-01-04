@@ -20,6 +20,10 @@
       {
         "command": "suitescript-manager.compare-code",
         "title": "Suitescript-Manager: Compare Code"
+      },
+      {
+        "command": "suitescript-manager.get-search-list",
+        "title": "Suitescript-Manager: Get Search List"
       }
     ]
   },

@@ -113,6 +113,33 @@ function activate(context) {
 			vscode.window.showErrorMessage(responseData?.message);
 		}
 
+		// const { url, headers } = authData.getHeaders({fileName: fileName, method: 'GET', action: 'compareFile'});
+
+		// (async () => {
+		// 	try {
+		// 		const response = await axios.get(url, { params: {fileName, action: 'compareFile'},headers });
+		// 		console.log('Response:', response.data);
+		// 		const responseData = response.data
+		// 		if(responseData.status == 'success'){
+		// 			const decoded = Buffer.from(responseData.contents, 'base64').toString('utf8');
+
+		// 			vscode.commands.executeCommand(
+		// 				"vscode.diff",
+		// 				vscode.Uri.file(filePath),
+		// 				await createVirtualDocument(decoded, "NetSuite"),
+		// 				"Local -> Netsuite"
+		// 			)	
+
+		// 			vscode.window.showInformationMessage('success');
+		// 		}
+		// 		else{
+		// 			vscode.window.showErrorMessage(responseData?.message);
+		// 		}
+		// 	} catch (err) {
+		// 		console.error('Error:', err.response?.data || err.message);
+		// 		vscode.window.showErrorMessage(err.response?.data || err.message);
+		// 	}
+		// })();
 	});
 
 	const GET_SEARCH_LIST = vscode.commands.registerCommand('suitescript-manager.get-search-list', async () => {
@@ -130,58 +157,40 @@ function activate(context) {
 		}
 
 		const authData = new authRest(config[environment]);
-		const response = await callRestlet(authData, 'GET',{action: 'getSearchList'});
-		console.log('Response:', response.data);
-		const responseData = response.data
+		const { url, headers } = authData.getHeaders({method: 'GET', action: 'getSearchList'});
 
-		if(responseData.status == 'error'){
-			vscode.window.showErrorMessage(responseData?.message);
-			return;
-		}
-		const searchList = responseData.list
+		(async () => {
+			try {
+				const response = await axios.get(url, { params: {action: 'getSearchList'},headers });
+				console.log('Response:', response.data);
+				const responseData = response.data
+				if(responseData.status == 'success'){
+					const searchList = responseData.list
 
-		const selectedSearch = await vscode.window.showQuickPick(searchList.map((search) => {return {label: search.title, description: search.recordType}}), {
-			placeHolder: 'Select Search'
-		});
+					const selectedSearch = await vscode.window.showQuickPick(searchList.map((search) => {return {label: search.title, description: search.recordType}}), {
+						placeHolder: 'Select Search'
+					});
 
-		if(!selectedSearch){
-			vscode.window.showErrorMessage('No search selected');
-			return;
-		}
+					if(!selectedSearch){
+						vscode.window.showErrorMessage('No search selected');
+						return;
+					}
 
-		console.log('selectedSearch',selectedSearch)
+					const searchObj = searchList.find((search) => search.title == selectedSearch)
+					console.log('searchObj',searchObj)
 
-		// @ts-ignore
-		const searchObj = searchList.find((search) => search.title == selectedSearch.label)
-		console.log('searchObj',searchObj)
-
-		const searchResponse = await callRestlet(authData, 'GET',{searchId: searchObj.id, action: 'previewSearch'});
-		const searchResponseData = searchResponse.data
-
-		if(searchResponseData.status == 'error'){
-			vscode.window.showErrorMessage(searchResponseData?.message);
-			return;
-		}
-
-		const panel = vscode.window.createWebviewPanel(
-			'netsuiteSearchPreview',
-			`Saved Search Preview`,
-			vscode.ViewColumn.One,
-			{ enableScripts: true }
-		);
-
-		const boilerplate = createBoilerplate(searchResponseData);
-
-    	panel.webview.html = renderTable(searchResponseData,boilerplate);
-
-		panel.webview.onDidReceiveMessage(async message => {
-			if (message.command === 'copyBoilerplate') {
-				await vscode.env.clipboard.writeText(message.boilerplate);
-				vscode.window.showInformationMessage('Search boilerplate copied');
+					const authData = new authRest(config[environment]);
+					const { url, headers } = authData.getHeaders({method: 'GET', action: 'previewSearch', searchId: searchObj.id});
+					vscode.window.showInformationMessage(searchObj);
+				}
+				else{
+					vscode.window.showErrorMessage(responseData?.message);
+				}
+			} catch (err) {
+				console.error('Error:', err.response?.data || err.message);
+				vscode.window.showErrorMessage(err.response?.data || err.message);
 			}
-		});
-
-		vscode.window.showInformationMessage(JSON.stringify(searchObj));
+		})();
 	})
 
 	context.subscriptions.push(PUSH_CODE);
@@ -220,65 +229,6 @@ async function createVirtualDocument(content, filename) {
   return doc.uri;
 }
 
-function renderTable(data, boilerplate) {
-  const headers = data.columns.map(c => `<th>${c.label || c.name}</th>`).join('');
-
-  const rows = data.rows.map(r => `
-    <tr>
-      ${Object.values(r).map(v => `<td>${v}</td>`).join('')}
-    </tr>
-  `).join('');
-
-  return `
-    <html>
-      <body>
-	  	<button id="copyBoilerplate">Copy Boilerplate</button>
-        <table border="1" cellspacing="0" cellpadding="4">
-          <thead><tr>${headers}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-		<script>
-        const vscode = acquireVsCodeApi();
-        const boilerplate = ${JSON.stringify(boilerplate)};
-
-        document.getElementById('copyBoilerplate')
-          .addEventListener('click', () => {
-            vscode.postMessage({
-              command: 'copyBoilerplate',
-              boilerplate
-            });
-          });
-      </script>
-      </body>
-    </html>
-  `;
-}
-function createBoilerplate(data) {
-  const lines = [];
-
-  lines.push(`const searchObj = search.load({ id: '${data.searchId}' });`);
-  lines.push('');
-  lines.push('searchObj.run().each(result => {');
-
-  data.columns.forEach(col => {
-    const opts = [`name: '${col.name}'`];
-    if (col.join) opts.push(`join: '${col.join}'`);
-    if (col.summary) opts.push(`summary: '${col.summary}'`);
-
-    lines.push(
-      `  const ${col.name.replace(/[^a-zA-Z0-9_]/g, '_')} = result.getValue({ ${opts.join(', ')} });`
-    );
-  });
-
-  lines.push('');
-  lines.push('  return true;');
-  lines.push('});');
-
-  return lines.join('\n');
-}
-
-
-
 
 class authRest{
 	constructor(config){
@@ -314,9 +264,6 @@ class authRest{
 			}
 			if(params.action){
 				requestData.data.action = params.action
-			}
-			if(params.searchId){
-				requestData.data.searchId = params.searchId
 			}
 		}
 
