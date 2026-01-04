@@ -1,0 +1,43 @@
+{
+  "name": "suitescript-manager",
+  "displayName": "suitescript-manager",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.107.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "suitescript-manager.push-code",
+        "title": "Suitescript-Manager: Push Code"
+      },
+      {
+        "command": "suitescript-manager.compare-code",
+        "title": "Suitescript-Manager: Compare Code"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.107.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.1"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "oauth-1.0a": "^2.2.6"
+  }
+}
