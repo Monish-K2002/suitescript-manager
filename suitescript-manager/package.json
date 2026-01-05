@@ -24,6 +24,18 @@
       {
         "command": "suitescript-manager.get-search-list",
         "title": "Suitescript-Manager: Get Search List"
+      },
+      {
+        "command": "suitescript-manager.pull-from-production",
+        "title": "Suitescript-Manager: Pull From Production"
+      },
+      {
+        "command": "suitescript-manager.pull-from-current-environment",
+        "title": "Suitescript-Manager: Pull From Current Environment"
+      },
+      {
+        "command": "suitescript-manager.check-environment",
+        "title": "Suitescript-Manager: Check Environment"
       }
     ]
   },

@@ -146,8 +146,8 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
             const fileName = requestParams.fileName;
             const action = requestParams.action;
             const searchId = requestParams.searchId;
-            if(action == 'compareFile'){
-                return compareFile(fileName)
+            if(action == 'getScriptContents'){
+                return getScriptContents(fileName)
             }
             if(action == 'getSearchList'){
                 return getSearchList()
@@ -164,7 +164,7 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
         }
     };
 
-    function compareFile(fileName){
+    function getScriptContents(fileName){
         log.debug('GET fileName',fileName)
         const searchClass = new savedSearch();
         const existingFile = searchClass.getFileId(fileName);

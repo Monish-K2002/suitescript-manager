@@ -3,9 +3,9 @@
 const vscode = require('vscode');
 const fs = require('fs')
 const path = require('path')
-const https = require('https')
+// const https = require('https')
 const axios = require('axios')
-const { AxiosHeaders } = require('axios')
+// const { AxiosHeaders } = require('axios')
 const OAuth = require('oauth-1.0a')
 const crypto = require('crypto')
 
@@ -93,7 +93,7 @@ function activate(context) {
 		}
 
 		const authData = new authRest(config[environment]);
-		const response = await callRestlet(authData, 'GET',{fileName: fileName, action: 'compareFile'});
+		const response = await callRestlet(authData, 'GET',{fileName: fileName, action: 'getScriptContents'});
 		console.log('Response:', response.data);
 		const responseData = response.data
 
@@ -103,8 +103,8 @@ function activate(context) {
 			vscode.commands.executeCommand(
 				"vscode.diff",
 				vscode.Uri.file(filePath),
-				await createVirtualDocument(decoded, "NetSuite"),
-				"Local -> Netsuite"
+				await createVirtualDocument(decoded),
+				`Local -> Netsuite (${fileName}) || ${environment}`
 			)	
 
 			vscode.window.showInformationMessage('success');
@@ -162,10 +162,11 @@ function activate(context) {
 			vscode.window.showErrorMessage(searchResponseData?.message);
 			return;
 		}
-
+		
 		const panel = vscode.window.createWebviewPanel(
 			'netsuiteSearchPreview',
-			`Saved Search Preview`,
+			// @ts-ignore
+			`Saved Search Preview - ${selectedSearch.label}`,
 			vscode.ViewColumn.One,
 			{ enableScripts: true }
 		);
@@ -184,9 +185,134 @@ function activate(context) {
 		vscode.window.showInformationMessage(JSON.stringify(searchObj));
 	})
 
+	const PULL_FROM_PRODUCTION = vscode.commands.registerCommand('suitescript-manager.pull-from-production', async () => {
+		const filePath = vscode.window.activeTextEditor.document.fileName
+
+		const fileName = path.basename(filePath);
+		const workspaceFolder = vscode.workspace.workspaceFolders[0].name;
+
+		const parts = filePath.split(path.sep);
+		const envIndex = parts.findIndex(p => p === workspaceFolder) + 1;
+		const environment = parts[envIndex];
+
+		console.log({ fileName, environment });
+
+		const config = loadConfig()
+		console.log('config',config)
+
+		const configEnvironments = Object.keys(config)
+		let productionEnv = configEnvironments.find(env => env.toLowerCase().includes('prod') || env.toLowerCase().includes('production'));
+		console.log('productionEnv',productionEnv);
+		if(!productionEnv){
+			vscode.window.showErrorMessage('Production environment not configured');
+			return;
+		}
+
+		if(!config[productionEnv]){
+			vscode.window.showErrorMessage('Environment not configured');
+			return;
+		}
+
+		const authData = new authRest(config[environment]);
+		const response = await callRestlet(authData, 'GET',{fileName: fileName, action: 'getScriptContents'});
+		console.log('Response:', response.data);
+		const responseData = response.data;
+
+		if(responseData.status == 'success'){
+			const decoded = Buffer.from(responseData.contents, 'base64').toString('utf8');
+
+			const editor = vscode.window.activeTextEditor;
+
+			await editor.edit(editBuilder => {
+				editBuilder.delete(new vscode.Range(0, 0, editor.document.lineCount, 0));
+				editBuilder.insert(new vscode.Position(0, 0), decoded);
+			});
+
+			const dir = parts;
+
+			dir.splice(envIndex, 0, 'Backup');
+			dir.pop();
+			console.log('Backup directory:', dir.join('/'));
+
+			if (!fs.existsSync(dir.join('/'))) {
+				fs.mkdirSync(dir.join('/'), { recursive: true });
+			}
+
+			const filePath = `${dir.join('/')}/${fileName.split('.')[0]}_${formatDate()}.js`;
+			fs.writeFileSync(filePath, decoded);
+
+			vscode.window.showInformationMessage('success');
+		}
+		else{
+			vscode.window.showErrorMessage(responseData?.message);
+		}
+	})
+
+	const PULL_FROM_CURRENT_ENVIRONMENT = vscode.commands.registerCommand('suitescript-manager.pull-from-current-environment', async () => {
+		const filePath = vscode.window.activeTextEditor.document.fileName
+
+		const fileName = path.basename(filePath);
+		const workspaceFolder = vscode.workspace.workspaceFolders[0].name;
+
+		const parts = filePath.split(path.sep);
+		const envIndex = parts.findIndex(p => p === workspaceFolder) + 1;
+		const environment = parts[envIndex];
+
+		console.log({ fileName, environment });
+
+		const config = loadConfig()
+		console.log('config',config)
+
+		if(!config[environment]){
+			vscode.window.showErrorMessage('Environment not configured');
+			return;
+		}
+
+		const authData = new authRest(config[environment]);
+		const response = await callRestlet(authData, 'GET',{fileName: fileName, action: 'getScriptContents'});
+		console.log('Response:', response.data);
+		const responseData = response.data;
+
+		if(responseData.status == 'success'){
+			const decoded = Buffer.from(responseData.contents, 'base64').toString('utf8');
+
+			const editor = vscode.window.activeTextEditor;
+
+			await editor.edit(editBuilder => {
+				editBuilder.delete(new vscode.Range(0, 0, editor.document.lineCount, 0));
+				editBuilder.insert(new vscode.Position(0, 0), decoded);
+			});
+
+			const dir = parts;
+
+			dir.splice(envIndex, 0, 'Backup');
+			dir.pop();
+			console.log('Backup directory:', dir.join('/'));
+
+			if (!fs.existsSync(dir.join('/'))) {
+				fs.mkdirSync(dir.join('/'), { recursive: true });
+			}
+
+			const filePath = `${dir.join('/')}/${fileName.split('.')[0]}_${formatDate()}.js`;
+			fs.writeFileSync(filePath, decoded);
+
+			vscode.window.showInformationMessage('success');
+		}
+		else{
+			vscode.window.showErrorMessage(responseData?.message);
+		}
+	})
+
+	const CHECK_ENVIRONMENT = vscode.commands.registerCommand('suitescript-manager.check-environment', async () => {
+
+	})
+
 	context.subscriptions.push(PUSH_CODE);
 	context.subscriptions.push(COMPARE_CODE);
 	context.subscriptions.push(GET_SEARCH_LIST);
+	context.subscriptions.push(PULL_FROM_PRODUCTION);
+	context.subscriptions.push(PULL_FROM_CURRENT_ENVIRONMENT);
+	context.subscriptions.push(CHECK_ENVIRONMENT);
 }
 
 async function pickEnvironment(config) {
@@ -211,7 +337,7 @@ async function pickEnvironment(config) {
 	return selected;
 }
 
-async function createVirtualDocument(content, filename) {
+async function createVirtualDocument(content) {
   const doc = await vscode.workspace.openTextDocument({
     content,
     language: "javascript"
@@ -277,8 +403,18 @@ function createBoilerplate(data) {
   return lines.join('\n');
 }
 
+function formatDate(d = new Date()) {
+  const pad = n => String(n).padStart(2, '0');
 
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
 
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+
+  return `${day}-${month}-${year} ${hours}-${minutes}`;
+}
 
 class authRest{
 	constructor(config){
