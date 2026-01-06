@@ -4,14 +4,36 @@
  * @ScriptName : suitescript_manager_RL.js
  */
 
-define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,search) {
+define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,encode,search,runtime) {
+
+    class Utils{
+        constructor(){
+
+        }
+
+        encoder(content){
+            return encode.convert({
+                string: content,
+                outputEncoding: encode.Encoding.BASE_64,
+                inputEncoding: encode.Encoding.UTF_8
+            });
+        }
+
+        decoder(content){
+            return encode.convert({
+                string: content,
+                outputEncoding: encode.Encoding.UTF_8,
+                inputEncoding: encode.Encoding.BASE_64
+            });
+        }
+    }
 
     class savedSearch{
         constructor(){
             this.fileName = ''
         }
 
-        getFileId(fileName){
+        getFile(fileName){
             this.fileName = fileName;
             
             const searchObj = search.create({
@@ -130,7 +152,70 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
                 columns: columns,
                 rows: rows
             }
+        }
+
+        getFileId(fileName){
+            this.fileName = fileName;
             
+            const searchObj = search.create({
+                type: "file",
+                filters:
+                [
+                    ["filetype","anyof","JAVASCRIPT"], 
+                    "AND", 
+                    ["name","is",this.fileName]
+                ],
+                columns:
+                [
+                    search.createColumn({name: "internalid", label: "Internal ID"})
+                ]
+            });
+
+            let fileId = '';
+            let scriptId = '';
+
+            const fileCount = searchObj.runPaged().count;
+            if(fileCount != 1){
+                throw new Error("Either there are 0 or more than 1 files");
+            }
+
+            searchObj.run().each(result => {
+                fileId = result.id
+            })
+
+            if(!fileId){
+                throw new Error("File not found");
+            }
+
+            const scriptSearchObj = search.create({
+                type: "script",
+                filters:
+                [
+                    ["scriptfile","anyof",fileId]
+                ],
+                columns:
+                [
+                    search.createColumn({name: "internalid", label: "Internal ID"})
+                ]
+            });
+
+            const scriptCount = searchObj.runPaged().count;
+            if(scriptCount != 1){
+                throw new Error("Either there are 0 or more than 1 scripts");
+            }
+
+            scriptSearchObj.run().each(result => {
+                scriptId = result.id
+            })
+
+            if(!scriptId && fileId){
+                return {id: fileId, type: 'file'}
+            }
+            else if(!scriptId && !fileId){
+                throw new Error("File not found");
+            }
+
+            return {id: scriptId, type: 'script'};
         }
     }
 
@@ -155,11 +240,14 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
             if(action == 'previewSearch'){
                 return previewSearch(searchId)
             }
+            if(action == 'getScriptId'){
+                return getScriptId(fileName)
+            }
         } catch (error) {
             log.error('error in GET', error);
             return {
                 status: 'error',
-                message: error
+                message: error.message
             };
         }
     };
@@ -167,15 +255,12 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
     function getScriptContents(fileName){
         log.debug('GET fileName',fileName)
         const searchClass = new savedSearch();
-        const existingFile = searchClass.getFileId(fileName);
+        const existingFile = searchClass.getFile(fileName);
 
         const contents = existingFile.getContents();
 
-        const encodedContent = encode.convert({
-            string: contents,
-            outputEncoding: encode.Encoding.BASE_64,
-            inputEncoding: encode.Encoding.UTF_8
-        });
+        const utils = new Utils()
+        const encodedContent = utils.encoder(contents);
         return {
             status: 'success',
             contents: encodedContent
@@ -197,6 +282,17 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
         return resultData
     }
 
+    function getScriptId(fileName){
+        const searchClass = new savedSearch();
+        const scriptIdObj = searchClass.getFileId(fileName)
+        return {
+            status: 'success',
+            scriptId: scriptIdObj.id,
+            accountId: runtime.accountId,
+            type: scriptIdObj.type
+        }
+    }
+
     /**
      * Handles POST requests.
      *
@@ -206,15 +302,13 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
     const post = (requestBody) => {
         try {
             const fileName = requestBody.fileName;
+            const utils = new Utils();
 
             const searchClass = new savedSearch();
-            const existingFile = searchClass.getFileId(fileName);
+            const existingFile = searchClass.getFile(fileName);
+            const oldContent = existingFile.getContents();
 
-            const decoded = encode.convert({
-                string: requestBody.message,
-                inputEncoding: encode.Encoding.BASE_64,
-                outputEncoding: encode.Encoding.UTF_8
-            });
+            const decoded = utils.decoder(requestBody.message);
 
             log.debug('Decoded Code', decoded);
 
@@ -231,7 +325,8 @@ define(['N/log','N/file','N/encode','N/search'], function (log,file,encode,searc
 
             return {
                 status: 'success',
-                message: 'File successfully updated'
+                message: 'File successfully updated',
+                oldContent: utils.encoder(oldContent)
             };
         } catch (error) {
             log.error('error in POST', error);

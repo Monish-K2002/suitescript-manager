@@ -5,7 +5,8 @@
 		"checkJs": true,  /* Typecheck .js files. */
 		"lib": [
 			"ES2022"
-		]
+		],
+		"noImplicitAny": false
 	},
 	"exclude": [
 		"node_modules"
