@@ -9,9 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "*"
-  ],
+  "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
     "commands": [
@@ -42,6 +40,10 @@
       {
         "command": "suitescript-manager.open-in-netsuite",
         "title": "Suitescript-Manager: Open in NetSuite"
+      },
+      {
+        "command": "suitescript-manager.fetch-recent-logs",
+        "title": "Suitescript-Manager: Fetch Recent Logs"
       }
     ]
   },

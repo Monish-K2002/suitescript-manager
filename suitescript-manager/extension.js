@@ -83,6 +83,100 @@ function activate(context) {
 		return axios.post(url, body, { headers });
 	}
 
+	let logPanel = null;
+
+	function getLogPanel() {
+		if (logPanel) {
+			logPanel.reveal(vscode.ViewColumn.One);
+			return logPanel;
+		}
+
+		logPanel = vscode.window.createWebviewPanel(
+			"netsuiteLogs",
+			"NetSuite Live Logs",
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true
+			}
+		);
+
+		logPanel.onDidDispose(() => {
+			logPanel = undefined;
+		});
+
+		logPanel.webview.html = getLogHtml();
+
+		return logPanel;
+	}
+
+	function getLogHtml(){
+		return `
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<style>
+				body {
+					font-family: monospace;
+					background: #1e1e1e;
+					color: #ddd;
+				}
+				.log {
+					white-space: pre-wrap;
+					margin-bottom: 8px;
+				}
+				.ERROR { color: #f14c4c; }
+				.WARN  { color: #cca700; }
+				.DEBUG { color: #4fc1ff; }
+				th, td {
+					border: 1px solid #ffffffff;
+					border-collapse: collapse;
+					padding: 4px;
+				}
+			</style>
+		</head>
+		<body>
+			<h3>NetSuite Live Logs</h3>
+			<div id="logs">
+				<table width='100%'>
+					<thead>
+						<tr>
+							<th style="width: 15%;">Time</th>
+							<th style="width: 10%;">Type</th>
+							<th style="width: 15%;">User</th>
+							<th style="width: 60%;">Message</th>
+						</tr>
+					</thead>
+					<tbody id="logs-body"></tbody>
+				</table>
+			</div>
+
+			<script>
+				const vscode = acquireVsCodeApi();
+				const container = document.getElementById("logs");
+
+				window.addEventListener("message", event => {
+					console.log('event.data',event.data);
+					const msg = event.data;
+
+					const tbody = document.getElementById("logs-body");
+					msg.payload.forEach(logData => {
+						const row = document.createElement("tr");
+						row.innerHTML = \`
+							<td align='center'>\${logData.date}</td>
+							<td align='center'>\${logData.type}</td>
+							<td align='center'>\${logData.user}</td>
+							<td>\${logData.message}</td>
+						\`;
+						tbody.appendChild(row);
+					})
+				});
+			</script>
+		</body>
+		</html>
+		`
+	}
+
 	// netsuiteStatusBar = vscode.window.createStatusBarItem(
 	// 	vscode.StatusBarAlignment.Right,
 	// 	100 // priority, higher = more to the left
@@ -96,397 +190,385 @@ function activate(context) {
 
 	// context.subscriptions.push(netsuiteStatusBar);
 
-	const PUSH_CODE = vscode.commands.registerCommand(
-		"suitescript-manager.push-code",
-		async () => {
-			await vscode.window.withProgress({
-					location: vscode.ProgressLocation.Notification,
-					title: "Processing",
-					cancellable: false,
-				},
-				async (progress) => {
-					try {
-						progress.report({ message: "Pushing to NetSuite..." });
-						await new Promise((resolve) =>
-							setTimeout(resolve, 100),
-						);
-
-						const ctx = await getContext();
-						console.log("ctx", ctx);
-						console.log("ctx.environment", ctx.environment);
-
-						const fileContent = ctx.editor.document.getText();
-						const encoded = Buffer.from(
-							fileContent,
-							"utf8",
-						).toString("base64");
-
-						if (
-							ctx.environment.toLocaleLowerCase() === "prod" ||
-							ctx.environment.toLocaleLowerCase() === "production"
-						){
-							const confirmationMessage =
-								await vscode.window.showQuickPick(
-									["Yes", "No"],
-									{placeHolder:"You are about to push code to Production. Are you sure?"}
-								);
-
-							if (confirmationMessage !== "Yes") {
-								vscode.window.showInformationMessage(
-									"Push cancelled",
-								);
-								return;
-							}
-						}
-
-						const authData = ctx.auth;
-						const response = await postRestlet(authData, {
-							fileName: ctx.fileName,
-							message: encoded,
-							method: "POST",
-						});
-
-						const responseData = response.data;
-						console.log("Response Data:", responseData);
-						if (responseData.status !== "success") {
-							vscode.window.showErrorMessage(
-								"Failed to push code",
-							);
-							return;
-						}
-
-						progress.report({ message: "Backing up old code..." });
-						await new Promise((resolve) =>
-							setTimeout(resolve, 100),
-						);
-
-						const oldContent = responseData.oldContent;
-						console.log("Old Content:", oldContent);
-
-						const decoded = Buffer.from(
-							responseData.oldContent,
-							"base64",
-						).toString("utf8");
-
-						const dir = ctx.parts;
-
-						dir.splice(ctx.envIndex, 0, "Backup");
-						dir.pop();
-						console.log("Backup directory:", dir.join("/"));
-
-						if (!fs.existsSync(dir.join("/"))) {
-							fs.mkdirSync(dir.join("/"), { recursive: true });
-						}
-
-						const backupFilePath = `${dir.join("/")}/${
-							ctx.fileName.split(".")[0]
-						}_${formatDate()}.js`;
-						fs.writeFileSync(backupFilePath, decoded);
-
-						vscode.window.showInformationMessage(
-							responseData?.message,
-						);
-					} catch (error) {
-						console.error("Error", {
-							message: error.message,
-							stack: error.stack,
-						});
-						vscode.window.showErrorMessage(
-							JSON.stringify({
-								message: error.message,
-								stack: error.stack,
-							}),
-						);
-					}
-				},
-			);
+	const PUSH_CODE = vscode.commands.registerCommand("suitescript-manager.push-code",async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
 		},
-	);
+		async (progress) => {
+			try {
+				progress.report({ message: "Pushing to NetSuite..." });
+				await new Promise((resolve) =>
+					setTimeout(resolve, 100),
+				);
 
-	const COMPARE_CODE = vscode.commands.registerCommand(
-		"suitescript-manager.compare-code",
-		async () => {
-			await vscode.window.withProgress({
-					location: vscode.ProgressLocation.Notification,
-					title: "Processing",
-					cancellable: false,
-				},
-				async (progress) => {
-					progress.report({
-						message: "Fetching File From NetSuite...",
-					});
-					await new Promise((resolve) => setTimeout(resolve, 100));
+				const ctx = await getContext();
+				console.log("ctx", ctx);
+				console.log("ctx.environment", ctx.environment);
 
-					const ctx = await getContext();
+				const fileContent = ctx.editor.document.getText();
+				const encoded = Buffer.from(
+					fileContent,
+					"utf8",
+				).toString("base64");
 
-					const authData = ctx.auth;
-					const response = await callRestlet(authData, "GET", {
-						fileName: ctx.fileName,
-						action: "getScriptContents",
-					});
-					console.log("Response:", response.data);
-					const responseData = response.data;
-
-					if (responseData.status == "success") {
-						const decoded = Buffer.from(
-							responseData.contents,
-							"base64",
-						).toString("utf8");
-
-						vscode.commands.executeCommand(
-							"vscode.diff",
-							vscode.Uri.file(ctx.filePath),
-							await createVirtualDocument(decoded),
-							`Local -> Netsuite (${ctx.fileName}) || ${ctx.environment}`,
+				if (
+					ctx.environment.toLocaleLowerCase() === "prod" ||
+					ctx.environment.toLocaleLowerCase() === "production"
+				){
+					const confirmationMessage =
+						await vscode.window.showQuickPick(
+							["Yes", "No"],
+							{placeHolder:"You are about to push code to Production. Are you sure?"}
 						);
 
-						vscode.window.showInformationMessage("success");
-					} else {
-						vscode.window.showErrorMessage(responseData?.message);
-					}
-				},
-			);
-		},
-	);
-
-	const GET_SEARCH_LIST = vscode.commands.registerCommand(
-		"suitescript-manager.get-search-list",
-		async () => {
-			await vscode.window.withProgress({
-					location: vscode.ProgressLocation.Notification,
-					title: "Processing",
-					cancellable: false,
-				},
-				async (progress) => {
-					progress.report({
-						message: "Fetching Search List From NetSuite...",
-					});
-					await new Promise((resolve) => setTimeout(resolve, 100));
-
-					const ctx = await getContext(false);
-
-					const authData = ctx.auth;
-					const response = await callRestlet(authData, "GET", {
-						action: "getSearchList",
-					});
-					console.log("Response:", response.data);
-					const responseData = response.data;
-					vscode.window.showInformationMessage("List Retrieved");
-
-					if (responseData.status == "error"){
-						vscode.window.showErrorMessage(responseData?.message);
+					if (confirmationMessage !== "Yes") {
+						vscode.window.showInformationMessage("Push cancelled");
 						return;
-					}
-					const searchList = responseData.list;
-
-					const selectedSearch = await vscode.window.showQuickPick(
-						searchList.map((search) => {
-							return {
-								label: search.title,
-								description: search.recordType,
-							};
-						}),
-						{placeHolder: "Select Search"}
-					);
-
-					if (!selectedSearch) {
-						vscode.window.showErrorMessage("No search selected");
-						return;
-					}
-
-					console.log("selectedSearch", selectedSearch);
-
-					// @ts-ignore
-					const searchObj = searchList.find((search) => search.title == selectedSearch.label);
-					console.log("searchObj", searchObj);
-					progress.report({
-						message: "Fetching Preview Data from NetSuite...",
-					});
-					await new Promise((resolve) => setTimeout(resolve, 100));
-
-					const searchResponse = await callRestlet(authData, "GET", {
-						searchId: searchObj.id,
-						action: "previewSearch",
-					});
-					const searchResponseData = searchResponse.data;
-
-					if (searchResponseData.status == "error") {
-						vscode.window.showErrorMessage(
-							searchResponseData?.message,
-						);
-						return;
-					}
-
-					const panel = vscode.window.createWebviewPanel(
-						"netsuiteSearchPreview",
-						// @ts-ignore
-						`Saved Search Preview - ${selectedSearch.label}`,
-						vscode.ViewColumn.One,
-						{ enableScripts: true },
-					);
-
-					const boilerplate = createBoilerplate(searchResponseData);
-
-					panel.webview.html = renderTable(
-						searchResponseData,
-						boilerplate,
-					);
-
-					panel.webview.onDidReceiveMessage(async (message) => {
-						if (message.command === "copyBoilerplate") {
-							await vscode.env.clipboard.writeText(
-								message.boilerplate,
-							);
-							vscode.window.showInformationMessage(
-								"Search boilerplate copied",
-							);
-						}
-					});
-				},
-			);
-		},
-	);
-
-	const PULL_FROM_PRODUCTION = vscode.commands.registerCommand(
-		"suitescript-manager.pull-from-production",
-		async () => {
-			await vscode.window.withProgress({
-					location: vscode.ProgressLocation.Notification,
-					title: "Processing",
-					cancellable: false,
-				},
-				async (progress) => {
-					progress.report({
-						message: "Fetching file from NetSuite Production...",
-					});
-					await new Promise((resolve) => setTimeout(resolve, 100));
-					const ctx = await getContext(true, true);
-
-					const authData = ctx.auth;
-					const response = await callRestlet(authData, "GET", {
-						fileName: ctx.fileName,
-						action: "getScriptContents",
-					});
-					console.log("Response:", response.data);
-					const responseData = response.data;
-
-					if (responseData.status == "success") {
-						const decoded = Buffer.from(
-							responseData.contents,
-							"base64",
-						).toString("utf8");
-
-						const fullRange = new vscode.Range(
-							ctx.editor.document.positionAt(0),
-							ctx.editor.document.positionAt(ctx.editor.document.getText().length),
-						);
-
-						const workspaceEdit = new vscode.WorkspaceEdit();
-						workspaceEdit.replace(
-							ctx.editor.document.uri,
-							fullRange,
-							decoded,
-						);
-
-						await vscode.workspace.applyEdit(workspaceEdit);
-
-						vscode.window.showInformationMessage("success");
-					} else {
-						vscode.window.showErrorMessage(responseData?.message);
-					}
-				},
-			);
-		},
-	);
-
-	const PULL_FROM_CURRENT_ENVIRONMENT = vscode.commands.registerCommand(
-		"suitescript-manager.pull-from-current-environment",
-		async () => {
-			await vscode.window.withProgress({
-					location: vscode.ProgressLocation.Notification,
-					title: "Processing",
-					cancellable: false,
-				},
-				async (progress) => {
-					progress.report({
-						message: "Fetching file from NetSuite...",
-					});
-					await new Promise((resolve) => setTimeout(resolve, 100));
-					const ctx = await getContext();
-
-					const authData = ctx.auth;
-					const response = await callRestlet(authData, "GET", {
-						fileName: ctx.fileName,
-						action: "getScriptContents",
-					});
-					console.log("Response:", response.data);
-					const responseData = response.data;
-
-					if (responseData.status == "success") {
-						const decoded = Buffer.from(
-							responseData.contents,
-							"base64",
-						).toString("utf8");
-
-						const fullRange = new vscode.Range(
-							ctx.editor.document.positionAt(0),
-							ctx.editor.document.positionAt(
-								ctx.editor.document.getText().length,
-							),
-						);
-
-						const workspaceEdit = new vscode.WorkspaceEdit();
-						workspaceEdit.replace(
-							ctx.editor.document.uri,
-							fullRange,
-							decoded,
-						);
-
-						await vscode.workspace.applyEdit(workspaceEdit);
-
-						vscode.window.showInformationMessage("success");
-					} else {
-						vscode.window.showErrorMessage(responseData?.message);
 					}
 				}
+
+				const authData = ctx.auth;
+				const response = await postRestlet(authData, {
+					fileName: ctx.fileName,
+					message: encoded,
+					method: "POST",
+				});
+
+				const responseData = response.data;
+				console.log("Response Data:", responseData);
+				if (responseData.status !== "success") {
+					vscode.window.showErrorMessage("Failed to push code");
+					return;
+				}
+
+				progress.report({ message: "Backing up old code..." });
+				await new Promise((resolve) =>
+					setTimeout(resolve, 100),
+				);
+
+				const oldContent = responseData.oldContent;
+				console.log("Old Content:", oldContent);
+
+				const decoded = Buffer.from(
+					responseData.oldContent,
+					"base64",
+				).toString("utf8");
+
+				const dir = ctx.parts;
+
+				dir.splice(ctx.envIndex, 0, "Backup");
+				dir.pop();
+				console.log("Backup directory:", dir.join("/"));
+
+				if (!fs.existsSync(dir.join("/"))) {
+					fs.mkdirSync(dir.join("/"), { recursive: true });
+				}
+
+				const backupFilePath = `${dir.join("/")}/${ctx.fileName.split(".")[0]}_${formatDate()}.js`;
+				fs.writeFileSync(backupFilePath, decoded);
+
+				vscode.window.showInformationMessage(
+					responseData?.message,
+				);
+			} catch (error) {
+				console.error("Error", {message: error.message,stack: error.stack});
+				vscode.window.showErrorMessage(JSON.stringify({
+					message: error.message,
+					stack: error.stack,
+				}));
+			}
+		});
+	});
+
+	const COMPARE_CODE = vscode.commands.registerCommand("suitescript-manager.compare-code",async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({message: "Fetching File From NetSuite..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			const ctx = await getContext();
+
+			const authData = ctx.auth;
+			const response = await callRestlet(authData, "GET", {
+				fileName: ctx.fileName,
+				action: "getScriptContents",
+			});
+			console.log("Response:", response.data);
+			const responseData = response.data;
+
+			if (responseData.status == "success") {
+				const decoded = Buffer.from(
+					responseData.contents,
+					"base64",
+				).toString("utf8");
+
+				vscode.commands.executeCommand(
+					"vscode.diff",
+					vscode.Uri.file(ctx.filePath),
+					await createVirtualDocument(decoded),
+					`Local -> Netsuite (${ctx.fileName}) || ${ctx.environment}`,
+				);
+
+				vscode.window.showInformationMessage("success");
+			} else {
+				vscode.window.showErrorMessage(responseData?.message);
+			}
+		})
+	});
+
+	const GET_SEARCH_LIST = vscode.commands.registerCommand("suitescript-manager.get-search-list",async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({message: "Fetching Search List From NetSuite..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			const ctx = await getContext(false);
+
+			const authData = ctx.auth;
+			const response = await callRestlet(authData, "GET", {
+				action: "getSearchList",
+			});
+			console.log("Response:", response.data);
+			const responseData = response.data;
+			vscode.window.showInformationMessage("List Retrieved");
+
+			if (responseData.status == "error"){
+				vscode.window.showErrorMessage(responseData?.message);
+				return;
+			}
+			const searchList = responseData.list;
+
+			const selectedSearch = await vscode.window.showQuickPick(
+				searchList.map((search) => {
+					return {
+						label: search.title,
+						description: search.recordType,
+					};
+				}),
+				{placeHolder: "Select Search"}
 			);
-		}
-	);
+
+			if (!selectedSearch) {
+				vscode.window.showErrorMessage("No search selected");
+				return;
+			}
+
+			// @ts-ignore
+			const searchObj = searchList.find((search) => search.title == selectedSearch.label);
+			
+			progress.report({message: "Fetching Preview Data from NetSuite..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			const searchResponse = await callRestlet(authData, "GET", {
+				searchId: searchObj.id,
+				action: "previewSearch",
+			});
+			const searchResponseData = searchResponse.data;
+
+			if (searchResponseData.status == "error") {
+				vscode.window.showErrorMessage(searchResponseData?.message);
+				return;
+			}
+
+			const panel = vscode.window.createWebviewPanel(
+				"netsuiteSearchPreview",
+				// @ts-ignore
+				`Saved Search Preview - ${selectedSearch.label}`,
+				vscode.ViewColumn.One,
+				{ enableScripts: true },
+			);
+
+			const boilerplate = createBoilerplate(searchResponseData);
+
+			panel.webview.html = renderTable(
+				searchResponseData,
+				boilerplate,
+			);
+
+			panel.webview.onDidReceiveMessage(async (message) => {
+				if (message.command === "copyBoilerplate") {
+					await vscode.env.clipboard.writeText(message.boilerplate);
+					vscode.window.showInformationMessage("Search boilerplate copied");
+				}
+			});
+		})
+	});
+
+	const PULL_FROM_PRODUCTION = vscode.commands.registerCommand("suitescript-manager.pull-from-production",async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({message: "Fetching file from NetSuite Production..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			const ctx = await getContext(true, true);
+
+			const authData = ctx.auth;
+			const response = await callRestlet(authData, "GET", {
+				fileName: ctx.fileName,
+				action: "getScriptContents",
+			});
+			console.log("Response:", response.data);
+			const responseData = response.data;
+
+			if (responseData.status == "success") {
+				const decoded = Buffer.from(
+					responseData.contents,
+					"base64",
+				).toString("utf8");
+
+				const fullRange = new vscode.Range(
+					ctx.editor.document.positionAt(0),
+					ctx.editor.document.positionAt(ctx.editor.document.getText().length),
+				);
+
+				const workspaceEdit = new vscode.WorkspaceEdit();
+				workspaceEdit.replace(
+					ctx.editor.document.uri,
+					fullRange,
+					decoded,
+				);
+
+				await vscode.workspace.applyEdit(workspaceEdit);
+
+				vscode.window.showInformationMessage("success");
+			} else {
+				vscode.window.showErrorMessage(responseData?.message);
+			}
+		});
+	});
+
+	const PULL_FROM_CURRENT_ENVIRONMENT = vscode.commands.registerCommand("suitescript-manager.pull-from-current-environment",async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({message: "Fetching file from NetSuite..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			const ctx = await getContext();
+
+			const authData = ctx.auth;
+			const response = await callRestlet(authData, "GET", {
+				fileName: ctx.fileName,
+				action: "getScriptContents",
+			});
+			console.log("Response:", response.data);
+			const responseData = response.data;
+
+			if (responseData.status == "success") {
+				const decoded = Buffer.from(
+					responseData.contents,
+					"base64",
+				).toString("utf8");
+
+				const fullRange = new vscode.Range(
+					ctx.editor.document.positionAt(0),
+					ctx.editor.document.positionAt(
+						ctx.editor.document.getText().length,
+					),
+				);
+
+				const workspaceEdit = new vscode.WorkspaceEdit();
+				workspaceEdit.replace(
+					ctx.editor.document.uri,
+					fullRange,
+					decoded,
+				);
+
+				await vscode.workspace.applyEdit(workspaceEdit);
+
+				vscode.window.showInformationMessage("success");
+			} else {
+				vscode.window.showErrorMessage(responseData?.message);
+			}
+		});
+	});
 
 	const OPEN_IN_NETSUITE = vscode.commands.registerCommand('suitescript-manager.open-in-netsuite', async () => {
 		await vscode.window.withProgress({
-				location: vscode.ProgressLocation.Notification,
-				title: "Processing",
-				cancellable: false,
-			},
-			async (progress) => {
-				progress.report({message: "Fetching Script ID from NetSuite..."});
-				await new Promise((resolve) => setTimeout(resolve, 100));
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({message: "Fetching Script ID from NetSuite..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
 
-				const ctx = await getContext();
-				const authData = ctx.auth;
-				
-				const response = await callRestlet(authData, 'GET', { 
-					fileName: ctx.fileName, 
-					action: 'getScriptId' 
-				});
-		
-				const responseData = response.data;
-		
-				if (responseData.status !== 'success'){
-					vscode.window.showErrorMessage(response.data.message);
-					return;
-				}
-		
-				const scriptId = responseData.scriptId;
+			const ctx = await getContext();
+			const authData = ctx.auth;
+			
+			const response = await callRestlet(authData, 'GET', { 
+				fileName: ctx.fileName, 
+				action: 'getScriptId' 
+			});
+	
+			const responseData = response.data;
+	
+			if (responseData.status !== 'success'){
+				vscode.window.showErrorMessage(response.data.message);
+				return;
+			}
+	
+			const scriptId = responseData.scriptId;
 
-				const accountId = responseData.accountId;
-				const fileUrl = `https://${accountId}.app.netsuite.com/app/common/media/mediaitem.nl?id=${scriptId}`;
-				const scriptUrl = `https://${accountId}.app.netsuite.com/app/common/scripting/script.nl?id=${scriptId}`;
-				const nsUrl = responseData.type === 'file' ? fileUrl : scriptUrl;
-				vscode.env.openExternal(vscode.Uri.parse(nsUrl));
-			})
+			const accountId = responseData.accountId;
+			const fileUrl = `https://${accountId}.app.netsuite.com/app/common/media/mediaitem.nl?id=${scriptId}`;
+			const scriptUrl = `https://${accountId}.app.netsuite.com/app/common/scripting/script.nl?id=${scriptId}`;
+			const nsUrl = responseData.type === 'file' ? fileUrl : scriptUrl;
+			vscode.env.openExternal(vscode.Uri.parse(nsUrl));
+		})
 	});
+
+	const GET_RECENT_LOGS = vscode.commands.registerCommand('suitescript-manager.fetch-recent-logs', async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing",
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({message: "Fetching Recent Logs from NetSuite..."});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			const ctx = await getContext();
+			const authData = ctx.auth;
+
+			const response = await callRestlet(authData, 'GET', { 
+				fileName: ctx.fileName, 
+				action: 'fetchRecentLogs' 
+			});
+	
+			const responseData = response.data;
+
+			if (responseData.status !== 'success'){
+				vscode.window.showErrorMessage(response.data.message);
+				return;
+			}
+
+			getLogPanel();
+
+			const logData = responseData.logs;
+			const logs = formatLogs(logData);
+
+			logPanel?.webview.postMessage({
+				type: "logs",
+				payload: logs
+			});
+		})
+	})
 
 	const CHECK_ENVIRONMENT = vscode.commands.registerCommand(
 		"suitescript-manager.check-environment",
@@ -520,6 +602,7 @@ function activate(context) {
 	context.subscriptions.push(PULL_FROM_CURRENT_ENVIRONMENT);
 	context.subscriptions.push(CHECK_ENVIRONMENT);
 	context.subscriptions.push(OPEN_IN_NETSUITE);
+	context.subscriptions.push(GET_RECENT_LOGS);
 }
 
 async function pickEnvironment(config) {
@@ -566,6 +649,20 @@ async function createVirtualDocument(content) {
 	});
 
 	return doc.uri;
+}
+
+function formatLogs(logData){
+	const logs = logData.map(log => {
+		return {
+			type: log.type.toUpperCase() || 'DEBUG',
+			date: `${log.date} ${log.time}` || '',
+			user: log.user || '',
+			scriptType: log.scriptType || '',
+			message: String(log.details) || ''
+		}
+	})
+
+	return logs;
 }
 
 function renderTable(data, boilerplate) {

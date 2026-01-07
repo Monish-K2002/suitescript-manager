@@ -217,6 +217,72 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
 
             return {id: scriptId, type: 'script'};
         }
+
+        getRecentLogs(fileName){
+            this.fileName = fileName;
+            
+            const searchObj = search.create({
+                type: "file",
+                filters:
+                [
+                    ["filetype","anyof","JAVASCRIPT"], 
+                    "AND", 
+                    ["name","is",this.fileName]
+                ],
+                columns:
+                [
+                    search.createColumn({name: "internalid", label: "Internal ID"})
+                ]
+            });
+
+            let fileId = '';
+            let scriptId = '';
+
+            const fileCount = searchObj.runPaged().count;
+            if(fileCount != 1){
+                throw new Error("Either there are 0 or more than 1 files");
+            }
+
+            searchObj.run().each(result => {
+                fileId = result.id
+            })
+
+            if(!fileId){
+                throw new Error("File not found");
+            }
+
+            const scriptLogSearchObj = search.create({
+                type: "scriptexecutionlog",
+                filters:
+                [
+                    ["script.scriptfile","anyof",fileId]
+                ],
+                columns:
+                [
+                    search.createColumn({name: "title", label: "title"}),
+                    search.createColumn({name: "type", label: "type"}),
+                    search.createColumn({name: "date", label: "date"}),
+                    search.createColumn({name: "time", label: "time"}),
+                    search.createColumn({name: "user", label: "user"}),
+                    search.createColumn({name: "scripttype", label: "scriptType"}),
+                    search.createColumn({name: "detail", label: "details"}),
+                    search.createColumn({name: "internalid", label: "Internal ID", sort: search.Sort.DESC})
+                ]
+            });
+            
+            const pagedData = scriptLogSearchObj.runPaged({ pageSize: 100 });
+            const page = pagedData.fetch({ index: 0 });
+            
+            const logs = page.data.map(result => {
+                const row = {};
+                scriptLogSearchObj.columns.forEach(col => {
+                    row[col.label] = result.getText(col) || result.getValue(col);
+                });
+                return row;
+            });
+            
+            return logs;
+        }
     }
 
     /**
@@ -231,6 +297,9 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
             const fileName = requestParams.fileName;
             const action = requestParams.action;
             const searchId = requestParams.searchId;
+            log.debug('GET action',action)
+            log.debug('GET fileName',fileName)
+            log.debug('GET searchId',searchId)
             if(action == 'getScriptContents'){
                 return getScriptContents(fileName)
             }
@@ -242,6 +311,9 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
             }
             if(action == 'getScriptId'){
                 return getScriptId(fileName)
+            }
+            if(action == 'fetchRecentLogs'){
+                return fetchRecentLogs(fileName)
             }
         } catch (error) {
             log.error('error in GET', error);
@@ -291,6 +363,16 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
             accountId: runtime.accountId,
             type: scriptIdObj.type
         }
+    }
+
+    function fetchRecentLogs(fileName){
+        const searchClass = new savedSearch();
+        const logData = searchClass.getRecentLogs(fileName)
+        
+        return {
+            status: 'success',
+            logs: logData
+        };
     }
 
     /**
