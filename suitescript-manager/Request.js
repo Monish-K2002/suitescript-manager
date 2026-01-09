@@ -15,13 +15,12 @@ async function request(auth, method, params = {}) {
 
         if (response.data.status === "error") {
             const errorMessage = response.data.message || "NetSuite returned an error"
-            vscode.window.showErrorMessage(`NetSuite API Error: ${errorMessage}`);
-            return
+            throw new Error(`NetSuite API Error: ${errorMessage}`);
         }
         return response.data;
     } catch (error) {
         const msg = error.response?.data?.message || error.message;
-        vscode.window.showErrorMessage(`NetSuite API Error: ${msg}`);
+        throw new Error(`NetSuite API Error: ${msg}`);
     }
 }
 

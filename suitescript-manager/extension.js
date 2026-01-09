@@ -5,54 +5,30 @@ const fs = require("fs");
 const {getContext} = require("./Context");
 const {request} = require('./Request')
 const path = require("path");
-// let netsuiteStatusBar = null;
+let folderStatusBarItem = null;
+let logPanel = null;
 
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+	// Create the status bar item
+    folderStatusBarItem = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Left, 
+        100
+    );
+    
+    // Add to subscriptions so it's disposed of properly
+    context.subscriptions.push(folderStatusBarItem);
 
-	let logPanel = null;
+	// Listen for editor changes
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(updateStatusBar)
+    );
 
-	function getLogPanel() {
-		if (logPanel) {
-			logPanel.reveal(vscode.ViewColumn.One);
-			return logPanel;
-		}
+    // Initial update
+    updateStatusBar(vscode.window.activeTextEditor);
 
-		logPanel = vscode.window.createWebviewPanel(
-			"netsuiteLogs",
-			"NetSuite Live Logs",
-			vscode.ViewColumn.One,
-			{
-				enableScripts: true,
-				retainContextWhenHidden: true,
-				localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
-			}
-		);
-
-		logPanel.onDidDispose(() => {
-			logPanel = undefined;
-		});
-
-		// Get path to the HTML file
-		const filePath = path.join(context.extensionPath, 'media', 'logPanel.html');
-		
-		// Read the file and inject URIs for CSS/JS
-		let htmlContent = fs.readFileSync(filePath, 'utf8');
-
-		// Convert local paths into Webview URIs
-		// const stylePath = vscode.Uri.file(path.join(context.extensionPath, 'media', 'style.css'));
-		// const styleUri = logPanel.webview.asWebviewUri(stylePath);
-
-		// Replace placeholders in your HTML with the real URIs
-		// htmlContent = htmlContent.replace('${styleUri}', styleUri);
-
-		logPanel.webview.html = htmlContent;
-
-		// logPanel.webview.html = getLogHtml();
-
-	}
 
 	// netsuiteStatusBar = vscode.window.createStatusBarItem(
 	// 	vscode.StatusBarAlignment.Right,
@@ -410,7 +386,7 @@ function activate(context) {
 					action: 'fetchRecentLogs' 
 				})
 	
-				getLogPanel();
+				getLogPanel(context);
 	
 				const logData = responseData.logs;
 				const logs = formatLogs(logData);
@@ -587,6 +563,73 @@ function createBoilerplate(data) {
 
 	return lines.join("\n");
 }
+
+	function getLogPanel(context) {
+		if (logPanel) {
+			logPanel.reveal(vscode.ViewColumn.One);
+			return logPanel;
+		}
+
+		logPanel = vscode.window.createWebviewPanel(
+			"netsuiteLogs",
+			"NetSuite Live Logs",
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
+			}
+		);
+
+		logPanel.onDidDispose(() => {
+			logPanel = undefined;
+		});
+
+		// Get path to the HTML file
+		const filePath = path.join(context.extensionPath, 'media', 'logPanel.html');
+		
+		// Read the file and inject URIs for CSS/JS
+		let htmlContent = fs.readFileSync(filePath, 'utf8');
+
+		logPanel.webview.html = htmlContent;
+
+		// logPanel.webview.html = getLogHtml();
+
+	}
+
+	const updateStatusBar = (editor) => {
+        if (editor) {
+            const uri = editor.document.uri;
+			console.log('uri',uri)
+			let separatedURI = editor.document.uri.fsPath.split(path.sep)
+			console.log('separatedURI',separatedURI)
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+			console.log('workspaceFolder',workspaceFolder);
+
+            if (workspaceFolder) {
+                const folderIndex = separatedURI.indexOf(workspaceFolder.name) + 1;
+				console.log('folderIndex',folderIndex);
+                const folderName = workspaceFolder.name;
+				console.log('folderName',folderName);
+
+                // Set the text
+                folderStatusBarItem.text = `${folderName}: ${separatedURI[folderIndex]}`;
+                
+                // Change color based on the index (example logic)
+                if (separatedURI[folderIndex].toLocaleLowerCase() == 'prod' || separatedURI[folderIndex].toLocaleLowerCase() == 'production') {
+                    folderStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+                } else {
+                    folderStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+                }
+
+                folderStatusBarItem.show();
+            } else {
+                folderStatusBarItem.hide();
+            }
+        } else {
+            folderStatusBarItem.hide();
+        }
+    };
 
 function formatDate(d = new Date()) {
 	const pad = (n) => String(n).padStart(2, "0");
