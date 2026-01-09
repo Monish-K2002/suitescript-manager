@@ -293,13 +293,10 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
      */
     const get = (requestParams) => {
         try {
-            log.debug('GET requestParams',requestParams)
             const fileName = requestParams.fileName;
             const action = requestParams.action;
             const searchId = requestParams.searchId;
-            log.debug('GET action',action)
-            log.debug('GET fileName',fileName)
-            log.debug('GET searchId',searchId)
+            log.debug('GET action && fileName',`${action}, ${fileName}`)
             if(action == 'getScriptContents'){
                 return getScriptContents(fileName)
             }
@@ -391,8 +388,6 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
             const oldContent = existingFile.getContents();
 
             const decoded = utils.decoder(requestBody.message);
-
-            log.debug('Decoded Code', decoded);
 
             var fileObj = file.create({
                 name: existingFile.name,

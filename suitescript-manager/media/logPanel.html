@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+		<html>
+		<head>
+			<style>
+				body {
+					font-family: monospace;
+					background: #1e1e1e;
+					color: #ddd;
+				}
+				.log {
+					white-space: pre-wrap;
+					margin-bottom: 8px;
+				}
+				.ERROR { color: #f14c4c; }
+				.WARN  { color: #cca700; }
+				.DEBUG { color: #4fc1ff; }
+				th, td {
+					border: 1px solid #ffffffff;
+					border-collapse: collapse;
+					padding: 4px;
+				}
+			</style>
+		</head>
+		<body>
+			<h3>NetSuite Live Logs</h3>
+			<div id="logs">
+				<table width='100%'>
+					<thead>
+						<tr>
+							<th style="width: 15%;">Time</th>
+							<th style="width: 10%;">Type</th>
+							<th style="width: 15%;">User</th>
+							<th style="width: 60%;">Message</th>
+						</tr>
+					</thead>
+					<tbody id="logs-body"></tbody>
+				</table>
+			</div>
+
+			<script>
+				const vscode = acquireVsCodeApi();
+				const container = document.getElementById("logs");
+
+				window.addEventListener("message", event => {
+					console.log('event.data',event.data);
+					const msg = event.data;
+
+					const tbody = document.getElementById("logs-body");
+					msg.payload.forEach(logData => {
+						const row = document.createElement("tr");
+						row.innerHTML = `
+							<td align='center'>${logData.date}</td>
+							<td align='center'>${logData.type}</td>
+							<td align='center'>${logData.user}</td>
+							<td>${logData.message}</td>
+						`;
+						tbody.appendChild(row);
+					})
+				});
+			</script>
+		</body>
+		</html>
