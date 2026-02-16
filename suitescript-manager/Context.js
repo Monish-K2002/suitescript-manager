@@ -4,6 +4,7 @@ const path = require("path");
 const {AuthService} = require("./AuthService");
 const { Ajv } = require("ajv");
 const ajv = new Ajv();
+const configCache = new Map();
 
 const schema = {
     type: "object",
@@ -58,6 +59,12 @@ async function loadConfig() {
     );
 
     if (!fs.existsSync(configPath)) return null;
+    
+    // Check cache to avoid repeated reads
+    const mTime = fs.statSync(configPath).mtime;
+    if (configCache.has(configPath) && configCache.get(configPath).mTime === mTime) {
+        return configCache.get(configPath).config;
+    }
 
     const fileContent = await fs.promises.readFile(configPath, "utf-8")
 
@@ -68,6 +75,8 @@ async function loadConfig() {
         throw new Error("Invalid Config format: " + ajv.errorsText(validate.errors));
     }
 
+    // Cache config
+    configCache.set(configPath, { mTime, config: JSON.parse(fileContent) });
     return JSON.parse(fileContent);
 }
 

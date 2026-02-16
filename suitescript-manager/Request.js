@@ -1,4 +1,3 @@
-const vscode = require("vscode");
 const axios = require("axios");
 
 async function request(auth, method, params = {}) {

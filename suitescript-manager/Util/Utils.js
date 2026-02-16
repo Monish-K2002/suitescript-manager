@@ -66,7 +66,7 @@ class Utils {
     formatLogs(logData){
         const logs = logData.map(log => {
             return {
-                type: log.type.toUpperCase() || 'DEBUG',
+                type: log?.type.toUpperCase() || 'DEBUG',
                 date: `${log.date} ${log.time}` || '',
                 user: log.user || '',
                 scriptType: log.scriptType || '',

@@ -2,7 +2,7 @@
   "name": "suitescript-manager",
   "displayName": "suitescript-manager",
   "description": "",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -10,7 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onCommand:suitescript-manager.*"
   ],
   "main": "./extension.js",
   "contributes": {
