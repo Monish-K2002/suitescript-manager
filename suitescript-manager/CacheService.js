@@ -56,6 +56,8 @@ class CacheService {
         await Promise.all(
             candidates.map((key) => this.globalState.update(key, undefined)),
         );
+
+        return candidates.length;
     }
 
     #buildKey(scope) {

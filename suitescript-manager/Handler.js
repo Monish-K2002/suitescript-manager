@@ -117,22 +117,28 @@ class CommandHandler {
 
         const searchList = responseData.list;
 
+        /**
+         * @type {Object}
+         */
         const selectedSearch = await vscode.window.showQuickPick(
             searchList.map((search) => ({
                 label: search.title,
                 description: search.recordType,
+                id: search.id,
             })),
             { placeHolder: "Select Search" },
         );
-
-        console.log('selectedSearch',selectedSearch);
 
         if (!selectedSearch) {
             vscode.window.showErrorMessage("No search selected");
             return;
         }
 
-        const searchObj = searchList.find((search) => search.title === selectedSearch);
+        const searchObj = searchList.find((search) => search.id === selectedSearch.id);
+        if (!searchObj) {
+            vscode.window.showErrorMessage("Unable to resolve selected search");
+            return;
+        }
 
         progress.report({ message: "Fetching Preview Data from NetSuite..." });
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -152,7 +158,7 @@ class CommandHandler {
 
         const panel = vscode.window.createWebviewPanel(
             "netsuiteSearchPreview",
-            `Saved Search Preview - ${selectedSearch}`,
+            `Saved Search Preview - ${selectedSearch.label}`,
             vscode.ViewColumn.One,
             { enableScripts: true },
         );
@@ -290,6 +296,58 @@ class CommandHandler {
             type: "logs",
             payload: logs,
         });
+    }
+
+    async handleRefreshSearchCache(progress) {
+        progress.report({ message: "Refreshing search cache..." });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const ctx = await getContext(false);
+        const authData = ctx.auth;
+
+        const invalidatedCount = await this.cache.invalidate({
+            accountKey: this.#getAccountKey(ctx),
+            environment: ctx.environment,
+            workspaceKey: this.#getWorkspaceKey(),
+            action: "getSearchList",
+        });
+
+        const scope = this.#getCacheScope(ctx, "getSearchList");
+        await this.cache.getOrSet(
+            scope,
+            this.cacheTtlMs.getSearchList,
+            () => request(authData, "GET", { action: "getSearchList" }),
+        );
+
+        vscode.window.showInformationMessage(
+            `Search cache refreshed (${invalidatedCount} entries removed).`,
+        );
+    }
+
+    async handleClearCacheCurrentScope(progress) {
+        progress.report({ message: "Clearing cache for current account/environment..." });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const ctx = await getContext(false);
+        const deleted = await this.cache.invalidate({
+            accountKey: this.#getAccountKey(ctx),
+            environment: ctx.environment,
+            workspaceKey: this.#getWorkspaceKey(),
+        });
+
+        vscode.window.showInformationMessage(
+            `Cleared ${deleted} cached entr${deleted === 1 ? "y" : "ies"} for ${ctx.environment}.`,
+        );
+    }
+
+    async handleClearCacheAll(progress) {
+        progress.report({ message: "Clearing all SuiteScript Manager cache..." });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const deleted = await this.cache.invalidate({});
+        vscode.window.showInformationMessage(
+            `Cleared ${deleted} cached entr${deleted === 1 ? "y" : "ies"} in total.`,
+        );
     }
 
     #getCacheScope(ctx, action, overrides = {}) {

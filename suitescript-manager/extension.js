@@ -53,6 +53,18 @@ function activate(context) {
             id: "suitescript-manager.fetch-recent-logs",
             handler: () => handler.runTask((progress) => handler.handleFetchRecentLogs(progress)),
         },
+        {
+            id: "suitescript-manager.refresh-search-cache",
+            handler: () => handler.runTask((progress) => handler.handleRefreshSearchCache(progress)),
+        },
+        {
+            id: "suitescript-manager.clear-cache-current-scope",
+            handler: () => handler.runTask((progress) => handler.handleClearCacheCurrentScope(progress)),
+        },
+        {
+            id: "suitescript-manager.clear-cache-all",
+            handler: () => handler.runTask((progress) => handler.handleClearCacheAll(progress)),
+        },
     ];
 
     commands.forEach((command) => {

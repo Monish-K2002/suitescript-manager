@@ -2,7 +2,7 @@
   "name": "suitescript-manager",
   "displayName": "suitescript-manager",
   "description": "",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -46,6 +46,18 @@
       {
         "command": "suitescript-manager.fetch-recent-logs",
         "title": "Suitescript-Manager: Fetch Recent Logs"
+      },
+      {
+        "command": "suitescript-manager.refresh-search-cache",
+        "title": "Suitescript-Manager: Refresh Search Cache"
+      },
+      {
+        "command": "suitescript-manager.clear-cache-current-scope",
+        "title": "Suitescript-Manager: Clear Cache (Current Scope)"
+      },
+      {
+        "command": "suitescript-manager.clear-cache-all",
+        "title": "Suitescript-Manager: Clear Cache (All)"
       }
     ]
   },

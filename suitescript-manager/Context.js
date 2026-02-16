@@ -26,6 +26,7 @@ const schema = {
     "additionalProperties": false,
     "minProperties": 1
 }
+const validate = ajv.compile(schema);
 
 async function pickEnvironment(config) {
     const environments = Object.keys(config || {});
@@ -61,25 +62,24 @@ async function loadConfig() {
     if (!fs.existsSync(configPath)) return null;
     
     // Check cache to avoid repeated reads
-    const mTime = fs.statSync(configPath).mtime;
-    if (configCache.has(configPath) && configCache.get(configPath).mTime === mTime) {
-        return configCache.get(configPath).config;
+    const mtimeMs = (await fs.promises.stat(configPath)).mtimeMs;
+    const cached = configCache.get(configPath);
+    if (cached && cached.mtimeMs === mtimeMs) {
+        return cached.config;
     }
 
-    const fileContent = await fs.promises.readFile(configPath, "utf-8")
-
-    const validate = ajv.compile(schema)
-    const valid = validate(JSON.parse(fileContent))
+    const fileContent = await fs.promises.readFile(configPath, "utf-8");
+    const parsedConfig = JSON.parse(fileContent);
+    const valid = validate(parsedConfig);
 
     if (!valid) {
         throw new Error("Invalid Config format: " + ajv.errorsText(validate.errors));
     }
 
     // Cache config
-    configCache.set(configPath, { mTime, config: JSON.parse(fileContent) });
-    return JSON.parse(fileContent);
+    configCache.set(configPath, { mtimeMs, config: parsedConfig });
+    return parsedConfig;
 }
-
 async function getContext(activeRequired = true, getProduction = false) {
     const editor = vscode.window.activeTextEditor;
     if (activeRequired && !editor){

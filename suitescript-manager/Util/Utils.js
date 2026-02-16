@@ -65,12 +65,13 @@ class Utils {
 
     formatLogs(logData){
         const logs = logData.map(log => {
+            const type = String(log?.type || "DEBUG").toUpperCase();
             return {
-                type: log?.type.toUpperCase() || 'DEBUG',
-                date: `${log.date} ${log.time}` || '',
-                user: log.user || '',
-                scriptType: log.scriptType || '',
-                message: String(log.details) || ''
+                type,
+                date: `${log?.date || ""} ${log?.time || ""}`.trim(),
+                user: log?.user || '',
+                scriptType: log?.scriptType || '',
+                message: String(log?.details ?? '')
             }
         })
 
@@ -115,13 +116,13 @@ class Utils {
 
     renderTable(data, boilerplate) {
         const headers = data.columns
-            .map((c) => `<th>${c.label || c.name}</th>`)
+            .map((c) => `<th>${this.#escapeHtml(c.label || c.name)}</th>`)
             .join("");
 
         const rows = data.rows.map((r) => `
             <tr>
             ${Object.values(r)
-                    .map((v) => `<td>${v}</td>`)
+                    .map((v) => `<td>${this.#escapeHtml(v)}</td>`)
                     .join("")}
             </tr>
         `).join("");
@@ -162,6 +163,15 @@ class Utils {
         const minutes = pad(d.getMinutes());
 
     	return `${day}-${month}-${year} ${hours}-${minutes}`;
+    }
+
+    #escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll("\"", "&quot;")
+            .replaceAll("'", "&#39;");
     }
 }
 

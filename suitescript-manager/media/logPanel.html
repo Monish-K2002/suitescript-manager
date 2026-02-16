@@ -39,23 +39,41 @@
 
 			<script>
 				const vscode = acquireVsCodeApi();
-				const container = document.getElementById("logs");
+				const MAX_ROWS = 500;
 
 				window.addEventListener("message", event => {
-					console.log('event.data',event.data);
 					const msg = event.data;
+					if (!Array.isArray(msg?.payload)) return;
 
 					const tbody = document.getElementById("logs-body");
-					msg.payload.forEach(logData => {
+					msg.payload.forEach((logData) => {
 						const row = document.createElement("tr");
-						row.innerHTML = `
-							<td align='center'>${logData.date}</td>
-							<td align='center'>${logData.type}</td>
-							<td align='center'>${logData.user}</td>
-							<td>${logData.message}</td>
-						`;
+
+						const dateCell = document.createElement("td");
+						dateCell.align = "center";
+						dateCell.textContent = String(logData.date ?? "");
+
+						const typeCell = document.createElement("td");
+						typeCell.align = "center";
+						typeCell.textContent = String(logData.type ?? "");
+
+						const userCell = document.createElement("td");
+						userCell.align = "center";
+						userCell.textContent = String(logData.user ?? "");
+
+						const messageCell = document.createElement("td");
+						messageCell.textContent = String(logData.message ?? "");
+
+						row.appendChild(dateCell);
+						row.appendChild(typeCell);
+						row.appendChild(userCell);
+						row.appendChild(messageCell);
 						tbody.appendChild(row);
-					})
+
+						while (tbody.rows.length > MAX_ROWS) {
+							tbody.removeChild(tbody.firstChild);
+						}
+					});
 				});
 			</script>
 		</body>
