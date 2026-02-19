@@ -268,7 +268,7 @@ class CommandHandler {
 
         const scriptId = responseData.scriptId;
 
-        const accountId = responseData.accountId;
+        const accountId = responseData.accountId.toLowerCase().replace("_","-");
         const fileUrl = `https://${accountId}.app.netsuite.com/app/common/media/mediaitem.nl?id=${scriptId}`;
         const scriptUrl = `https://${accountId}.app.netsuite.com/app/common/scripting/script.nl?id=${scriptId}`;
         const nsUrl = responseData.type === "file" ? fileUrl : scriptUrl;
