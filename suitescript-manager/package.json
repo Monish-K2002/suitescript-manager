@@ -2,7 +2,7 @@
   "name": "suitescript-manager",
   "displayName": "suitescript-manager",
   "description": "",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -58,6 +58,10 @@
       {
         "command": "suitescript-manager.clear-cache-all",
         "title": "Suitescript-Manager: Clear Cache (All)"
+      },
+      {
+        "command": "suitescript-manager.configure-environment",
+        "title": "Suitescript-Manager: Configure Environment"
       }
     ]
   },

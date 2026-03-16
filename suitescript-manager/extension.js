@@ -65,6 +65,10 @@ function activate(context) {
             id: "suitescript-manager.clear-cache-all",
             handler: () => handler.runTask((progress) => handler.handleClearCacheAll(progress)),
         },
+        {
+            id: "suitescript-manager.configure-environment",
+            handler: () => handler.runTask((progress) => handler.handleConfigureEnvironment(progress)),
+        },
     ];
 
     commands.forEach((command) => {

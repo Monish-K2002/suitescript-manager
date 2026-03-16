@@ -1,4 +1,6 @@
 const vscode = require("vscode");
+const path = require("path");
+const fs = require("fs");
 const { getContext } = require("./Context");
 const { request } = require("./Request");
 const utils = require("./Util/Utils");
@@ -345,6 +347,98 @@ class CommandHandler {
         const deleted = await this.cache.invalidate({});
         vscode.window.showInformationMessage(
             `Cleared ${deleted} cached entr${deleted === 1 ? "y" : "ies"} in total.`,
+        );
+    }
+
+    async handleConfigureEnvironment(progress) {
+        progress.report({ message: "Reading workspace folders..." });
+
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            throw new Error("No workspace folder open");
+        }
+
+        const EXCLUDED = new Set(["node_modules", "Backup", ".git", ".vscode", ".idea"]);
+        const entries = await vscode.workspace.fs.readDirectory(workspaceFolder.uri);
+        const envFolders = entries
+            .filter(([name, type]) =>
+                type === vscode.FileType.Directory &&
+                !name.startsWith(".") &&
+                !EXCLUDED.has(name),
+            )
+            .map(([name]) => name);
+
+        const CUSTOM_LABEL = "$(edit) Enter a custom name...";
+        const pickItems = [
+            ...envFolders.map((f) => ({ label: f })),
+            { label: CUSTOM_LABEL, alwaysShow: true },
+        ];
+
+        const picked = await vscode.window.showQuickPick(pickItems, {
+            placeHolder: "Select an environment folder to configure",
+            ignoreFocusOut: true,
+        });
+        if (!picked) return;
+
+        let environment;
+        if (picked.label === CUSTOM_LABEL) {
+            environment = await vscode.window.showInputBox({
+                title: "Configure Environment",
+                prompt: "Environment name",
+                placeHolder: "e.g. sandbox, production",
+                ignoreFocusOut: true,
+                validateInput: (v) => (v ?? "").trim() ? null : "Name cannot be empty",
+            });
+        } else {
+            environment = picked.label;
+        }
+        if (!environment) return;
+
+        const configPath = path.join(workspaceFolder.uri.fsPath, ".ss-manager.json");
+        let config = {};
+        try {
+            const raw = await fs.promises.readFile(configPath, "utf-8");
+            config = JSON.parse(raw);
+        } catch {
+            // File does not exist or is not valid JSON — start fresh
+        }
+
+        const existing = config[environment] || {};
+        const isUpdate = Boolean(config[environment]);
+
+        const fields = [
+            { key: "CLIENT_ID",     label: "Client ID",     placeholder: "your-client-id",     password: false },
+            { key: "CLIENT_SECRET", label: "Client Secret", placeholder: "your-client-secret", password: true  },
+            { key: "ACCESS_TOKEN",  label: "Access Token",  placeholder: "your-access-token",  password: false },
+            { key: "ACCESS_SECRET", label: "Access Secret", placeholder: "your-access-secret", password: true  },
+            { key: "REALM",         label: "Realm",         placeholder: "1234567_SB1",         password: false },
+            { key: "URL",           label: "RESTlet URL",   placeholder: "https://<account>.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=###&deploy=#", password: false },
+        ];
+
+        const newValues = {};
+        for (const field of fields) {
+            const value = await vscode.window.showInputBox({
+                title: `Configure "${environment}" — ${field.label}`,
+                prompt: field.label,
+                value: existing[field.key] ?? "",
+                placeHolder: field.placeholder,
+                password: field.password,
+                ignoreFocusOut: true,
+                validateInput: (v) => (v ?? "").trim() ? null : `${field.label} is required`,
+            });
+
+            if (value === undefined) {
+                vscode.window.showInformationMessage("Configuration cancelled");
+                return;
+            }
+            newValues[field.key] = value;
+        }
+
+        config[environment] = newValues;
+        await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
+
+        vscode.window.showInformationMessage(
+            `${isUpdate ? "Updated" : "Created"} configuration for "${environment}".`,
         );
     }
 
