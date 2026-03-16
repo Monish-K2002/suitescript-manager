@@ -13,7 +13,7 @@ class CommandHandler {
         this.cacheTtlMs = {
             getSearchList: 6 * 60 * 60 * 1000,
             previewSearch: 15 * 60 * 1000,
-            getScriptId: 24 * 60 * 60 * 1000,
+            getScriptId: 30 * 24 * 60 * 60 * 1000,
         };
     }
 

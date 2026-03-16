@@ -17,7 +17,7 @@ class SyncStatusProvider {
     }
 
     /**
-     * @param {{ type: "env" | "file", label: string, resourceUri?: vscode.Uri, envName?: string }} element
+     * @param {{ type: "env" | "file", label: string, resourceUri?: vscode.Uri, envName?: string, configured?: boolean, status?: string }} element
      * @returns {vscode.TreeItem}
      */
     getTreeItem(element) {
@@ -62,7 +62,7 @@ class SyncStatusProvider {
     }
 
     /**
-     * @param {{ type: "env" | "file", label: string, resourceUri?: vscode.Uri, envName?: string } | undefined} element
+     * @param {{ type: "env" | "file", label: string, resourceUri?: vscode.Uri, envName?: string, configured?: boolean, status?: string } | undefined} element
      * @returns {Promise<Array<any>>}
      */
     async getChildren(element) {
