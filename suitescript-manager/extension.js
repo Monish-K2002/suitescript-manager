@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const path = require("path");
 const CommandHandler = require("./Handler");
+const SyncStatusProvider = require("./SyncStatusProvider");
 
 let folderStatusBarItem = null;
 let handler = null;
@@ -10,6 +11,13 @@ let handler = null;
  */
 function activate(context) {
     handler = new CommandHandler(context);
+
+    const syncStatusProvider = new SyncStatusProvider(context);
+    const syncTreeView = vscode.window.createTreeView(
+        "suitescript-manager.syncStatus",
+        { treeDataProvider: syncStatusProvider },
+    );
+    context.subscriptions.push(syncTreeView);
 
     folderStatusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,

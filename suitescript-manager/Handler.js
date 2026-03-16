@@ -72,6 +72,15 @@ class CommandHandler {
             fileName: ctx.fileName,
         });
 
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (workspaceFolder && ctx.filePath) {
+            const relativePath = vscode.workspace.asRelativePath(ctx.filePath, false);
+            const key = `ssm:lastPush:${ctx.environment}:${relativePath}`;
+            await this.extensionContext.globalState.update(key, {
+                ts: Date.now(),
+            });
+        }
+
         vscode.window.showInformationMessage(responseData?.message || "Success");
     }
 
