@@ -1,10 +1,8 @@
 const vscode = require("vscode");
 const { getContext } = require("./Context");
 const { request } = require("./Request");
-const Utils = require("./Util/Utils");
+const utils = require("./Util/Utils");
 const CacheService = require("./CacheService");
-
-const utils = new Utils();
 
 class CommandHandler {
     constructor(extensionContext) {

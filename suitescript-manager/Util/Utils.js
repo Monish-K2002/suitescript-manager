@@ -175,4 +175,4 @@ class Utils {
     }
 }
 
-module.exports = Utils;
+module.exports = new Utils();
