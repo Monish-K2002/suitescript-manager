@@ -112,6 +112,10 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
             const searchObj = search.load({
                 id: searchId
             });
+            const count = searchObj.runPaged().count;
+            if(count == 0){
+                throw new Error("Search does not have any results");
+            }
 
             const columns = searchObj.columns.map(col => {
                 const obj = {
@@ -269,6 +273,11 @@ define(['N/log','N/file','N/encode','N/search','N/runtime'], function (log,file,
                     search.createColumn({name: "internalid", label: "Internal ID", sort: search.Sort.DESC})
                 ]
             });
+
+            const logCount = scriptLogSearchObj.runPaged().count;
+            if(logCount == 0){
+                throw new Error("No logs found");
+            }
             
             const pagedData = scriptLogSearchObj.runPaged({ pageSize: 100 });
             const page = pagedData.fetch({ index: 0 });
