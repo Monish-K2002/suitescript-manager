@@ -59,15 +59,7 @@
         "command": "suitescript-manager.configure-environment",
         "title": "Suitescript-Manager: Configure Environment"
       }
-    ],
-    "views": {
-      "explorer": [
-        {
-          "id": "suitescript-manager.syncStatus",
-          "name": "SuiteScript Sync Status"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",
