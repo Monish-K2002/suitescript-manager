@@ -1,6 +1,6 @@
 # SuiteScript Manager
 
-A VS Code extension to speed up SuiteScript development by syncing files with NetSuite, comparing local vs remote code, previewing saved searches, and viewing recent script logs.
+A VS Code extension written in TypeScript to speed up SuiteScript development by syncing files with NetSuite, comparing local vs remote code, previewing saved searches, and viewing recent script logs.
 
 ## Features
 
@@ -125,6 +125,12 @@ npm install
 npm run lint
 ```
 
+### Compile
+
+```bash
+npm run compile
+```
+
 ### Test
 
 ```bash
@@ -139,13 +145,15 @@ npm test
 
 ## Project Structure
 
-- `extension.js`: activation and command registration
-- `Handler.js`: command implementations
-- `Context.js`: environment detection + config loading/validation
-- `AuthService.js`: OAuth 1.0a header generation
-- `Request.js`: axios wrapper with retry logic
-- `CacheService.js`: globalState cache layer
-- `Util/Utils.js`: backups, webviews, formatting helpers
+- `extension.ts`: activation and command registration
+- `Handler.ts`: command implementations
+- `Context.ts`: environment detection + config loading/validation
+- `AuthService.ts`: OAuth 1.0a header generation
+- `Request.ts`: axios wrapper with retry logic
+- `CacheService.ts`: globalState cache layer
+- `Util/Utils.ts`: backups, webviews, formatting helpers
+- `types.ts`: shared TypeScript interfaces
+- `out/`: compiled extension output
 - `media/`: webview assets
 
 ## Known Notes
