@@ -14,6 +14,7 @@ const http = axios.create({
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 2;
 
+// Retries only for transient HTTP and network failures that are likely to succeed on a second attempt.
 function shouldRetry(error: unknown): boolean {
     const axiosError = error as AxiosError | undefined;
     const status = axiosError?.response?.status;
@@ -31,10 +32,12 @@ function shouldRetry(error: unknown): boolean {
     ].includes(errorCode ?? "");
 }
 
+// Small delay helper used for request backoff.
 async function sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Normalizes different thrown error shapes into one user-facing message.
 function getErrorMessage(error: unknown): string {
     if (axios.isAxiosError(error)) {
         const responseData = error.response?.data as { message?: string } | undefined;
@@ -48,6 +51,7 @@ function getErrorMessage(error: unknown): string {
     return String(error);
 }
 
+// Sends a signed NetSuite request and wraps retry/error handling in one place for the extension.
 export async function request<T>(
     auth: AuthProvider,
     method: RequestMethod,

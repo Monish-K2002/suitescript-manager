@@ -56,6 +56,7 @@ class AuthService {
                 .digest("base64"),
         });
     }
+    // Builds the signed request shape expected by the NetSuite RESTlet for both reads and writes.
     getHeaders(params) {
         const url = this.config.URL;
         const requestData = {

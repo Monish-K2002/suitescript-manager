@@ -6,6 +6,7 @@ class CacheService {
     constructor(globalState) {
         this.globalState = globalState;
     }
+    // Returns a cached value when present, otherwise loads it and stores it with a TTL.
     async getOrSet(scope, ttlMs, loader) {
         const cached = await this.get(scope);
         if (cached !== undefined) {
@@ -15,6 +16,7 @@ class CacheService {
         await this.set(scope, value, ttlMs);
         return value;
     }
+    // Reads one cache entry and eagerly clears it if it has expired.
     async get(scope) {
         const key = this.buildKey(scope);
         const entry = this.globalState.get(key);
@@ -27,6 +29,7 @@ class CacheService {
         }
         return entry.value;
     }
+    // Persists a cache entry with metadata so expiration can be checked later.
     async set(scope, value, ttlMs) {
         const key = this.buildKey(scope);
         const now = Date.now();
@@ -36,6 +39,7 @@ class CacheService {
             expiresAt: ttlMs > 0 ? now + ttlMs : null,
         });
     }
+    // Removes every cached entry that matches the provided partial scope.
     async invalidate(partialScope = {}) {
         const fragments = this.buildFragments(partialScope);
         const keys = this.globalState.keys();
@@ -48,6 +52,7 @@ class CacheService {
         await Promise.all(candidates.map((key) => this.globalState.update(key, undefined)));
         return candidates.length;
     }
+    // Normalizes each scope dimension into a stable key format.
     buildKey(scope) {
         const segments = {
             account: this.normalize(scope.accountKey),
@@ -59,6 +64,7 @@ class CacheService {
         };
         return `${this.prefix}:account=${segments.account}:env=${segments.env}:ws=${segments.ws}:action=${segments.action}:file=${segments.file}:search=${segments.search}`;
     }
+    // Converts a partial scope into key fragments so invalidation can match subsets cheaply.
     buildFragments(partialScope) {
         const map = {
             accountKey: "account",
@@ -72,6 +78,7 @@ class CacheService {
             .filter(([sourceKey]) => partialScope[sourceKey] !== undefined && partialScope[sourceKey] !== null)
             .map(([sourceKey, targetKey]) => `:${targetKey}=${this.normalize(partialScope[sourceKey])}`);
     }
+    // Lowercases and URL-encodes values so cache keys stay predictable across environments.
     normalize(value) {
         return encodeURIComponent(String(value ?? "").toLowerCase());
     }

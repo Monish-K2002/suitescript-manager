@@ -37,34 +37,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getContext = getContext;
-const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
-const ajv_1 = __importDefault(require("ajv"));
 const vscode = __importStar(require("vscode"));
 const AuthService_1 = require("./AuthService");
-const ajv = new ajv_1.default();
-const configCache = new Map();
-const schema = {
-    type: "object",
-    patternProperties: {
-        ".*": {
-            type: "object",
-            properties: {
-                CLIENT_ID: { type: "string" },
-                CLIENT_SECRET: { type: "string" },
-                ACCESS_TOKEN: { type: "string" },
-                ACCESS_SECRET: { type: "string" },
-                REALM: { type: "string" },
-                URL: { type: "string" },
-            },
-            required: ["CLIENT_ID", "CLIENT_SECRET", "ACCESS_TOKEN", "ACCESS_SECRET", "REALM", "URL"],
-            additionalProperties: true,
-        },
-    },
-    additionalProperties: false,
-    minProperties: 1,
-};
-const validate = ajv.compile(schema);
+const ConfigService_1 = __importDefault(require("./ConfigService"));
+// Reuses the single configured environment automatically, otherwise asks the user to choose one.
 async function pickEnvironment(config) {
     const environments = Object.keys(config);
     if (!environments.length) {
@@ -81,29 +58,11 @@ async function pickEnvironment(config) {
     }
     return selected;
 }
+// Loads and validates the workspace config file, caching it until the file changes on disk.
 async function loadConfig() {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-        return null;
-    }
-    const configPath = path.join(workspaceFolder.uri.fsPath, ".ss-manager.json");
-    if (!fs.existsSync(configPath)) {
-        return null;
-    }
-    const mtimeMs = (await fs.promises.stat(configPath)).mtimeMs;
-    const cached = configCache.get(configPath);
-    if (cached && cached.mtimeMs === mtimeMs) {
-        return cached.config;
-    }
-    const fileContent = await fs.promises.readFile(configPath, "utf-8");
-    const parsedConfig = JSON.parse(fileContent);
-    if (!validate(parsedConfig)) {
-        throw new Error(`Invalid config format: ${ajv.errorsText(validate.errors)}`);
-    }
-    const config = parsedConfig;
-    configCache.set(configPath, { mtimeMs, config });
-    return config;
+    return await ConfigService_1.default.loadConfig();
 }
+// Collects the active editor, environment, and auth details that command handlers depend on.
 async function getContext(activeRequired = true, getProduction = false) {
     const editor = vscode.window.activeTextEditor;
     if (activeRequired && !editor) {
@@ -114,9 +73,12 @@ async function getContext(activeRequired = true, getProduction = false) {
     if (!workspaceFolder) {
         throw new Error("No workspace folder open");
     }
-    const config = await loadConfig();
-    if (!config) {
-        throw new Error(".ss-manager.json not found");
+    let config;
+    try {
+        config = await loadConfig();
+    }
+    catch (error) {
+        throw new Error(".ss-manager.json not found or invalid");
     }
     const parts = filePath ? filePath.split(path.sep) : [];
     const envIndex = parts.findIndex((segment) => segment === workspaceFolder.name) + 1;

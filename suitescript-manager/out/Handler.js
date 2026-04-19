@@ -36,10 +36,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const fs = __importStar(require("node:fs"));
-const path = __importStar(require("node:path"));
 const vscode = __importStar(require("vscode"));
 const CacheService_1 = __importDefault(require("./CacheService"));
+const ConfigService_1 = __importDefault(require("./ConfigService"));
 const Context_1 = require("./Context");
 const Request_1 = require("./Request");
 const Utils_1 = __importDefault(require("./Util/Utils"));
@@ -55,6 +54,7 @@ class CommandHandler {
         this.extensionContext = extensionContext;
         this.cache = new CacheService_1.default(extensionContext.globalState);
     }
+    // Wraps each command in a consistent VS Code progress notification and shared error handling.
     async runTask(task) {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -70,6 +70,7 @@ class CommandHandler {
             }
         });
     }
+    // Pushes the active editor contents to NetSuite, optionally backing up the previous remote contents.
     async handlePushCode(progress) {
         progress.report({ message: "Preparing context..." });
         const ctx = await (0, Context_1.getContext)();
@@ -109,6 +110,7 @@ class CommandHandler {
         }
         vscode.window.showInformationMessage(responseData.message ?? "Success");
     }
+    // Fetches the remote file contents and opens a VS Code diff against the local file.
     async handleCompareCode(progress) {
         progress.report({ message: "Fetching file from NetSuite..." });
         await this.sleep(100);
@@ -121,6 +123,7 @@ class CommandHandler {
         await vscode.commands.executeCommand("vscode.diff", vscode.Uri.file(ctx.filePath), await Utils_1.default.createVirtualDocument(decoded), `Local -> Netsuite (${ctx.fileName}) || ${ctx.environment}`);
         vscode.window.showInformationMessage("Success");
     }
+    // Loads available saved searches, lets the user choose one, and previews the first result page.
     async handleGetSearchList(progress) {
         progress.report({ message: "Fetching search list from NetSuite..." });
         await this.sleep(100);
@@ -160,6 +163,7 @@ class CommandHandler {
             }
         });
     }
+    // Replaces the active file with the production copy after resolving the production environment config.
     async handlePullFromProduction(progress) {
         progress.report({ message: "Fetching file from NetSuite production..." });
         await this.sleep(100);
@@ -167,6 +171,7 @@ class CommandHandler {
         await this.replaceActiveEditorContents(ctx);
         vscode.window.showInformationMessage("Success");
     }
+    // Replaces the active file with the current environment's remote copy.
     async handlePullFromCurrentEnvironment(progress) {
         progress.report({ message: "Fetching file from NetSuite..." });
         await this.sleep(100);
@@ -174,6 +179,7 @@ class CommandHandler {
         await this.replaceActiveEditorContents(ctx);
         vscode.window.showInformationMessage("Success");
     }
+    // Resolves the NetSuite record behind the current file and opens it in the browser.
     async handleOpenInNetSuite(progress) {
         progress.report({ message: "Fetching script ID from NetSuite..." });
         await this.sleep(100);
@@ -191,6 +197,7 @@ class CommandHandler {
         const netSuiteUrl = responseData.type === "file" ? fileUrl : scriptUrl;
         await vscode.env.openExternal(vscode.Uri.parse(netSuiteUrl));
     }
+    // Fetches recent execution logs for the current script and sends them to the shared log panel.
     async handleFetchRecentLogs(progress) {
         progress.report({ message: "Fetching recent logs from NetSuite..." });
         await this.sleep(100);
@@ -204,6 +211,7 @@ class CommandHandler {
             payload: Utils_1.default.formatLogs(responseData.logs),
         });
     }
+    // Clears the cached search list for the current scope, then immediately warms it again.
     async handleRefreshSearchCache(progress) {
         progress.report({ message: "Refreshing search cache..." });
         await this.sleep(100);
@@ -218,6 +226,7 @@ class CommandHandler {
         await this.cache.getOrSet(scope, this.cacheTtlMs.getSearchList, () => (0, Request_1.request)(ctx.auth, "GET", { action: "getSearchList" }));
         vscode.window.showInformationMessage(`Search cache refreshed (${invalidatedCount} entries removed).`);
     }
+    // Clears cached data only for the currently selected account/environment/workspace combination.
     async handleClearCacheCurrentScope(progress) {
         progress.report({ message: "Clearing cache for current account/environment..." });
         await this.sleep(100);
@@ -229,12 +238,14 @@ class CommandHandler {
         });
         vscode.window.showInformationMessage(`Cleared ${deleted} cached entr${deleted === 1 ? "y" : "ies"} for ${ctx.environment}.`);
     }
+    // Clears every SuiteScript Manager cache entry stored in global state.
     async handleClearCacheAll(progress) {
         progress.report({ message: "Clearing all SuiteScript Manager cache..." });
         await this.sleep(100);
         const deleted = await this.cache.invalidate({});
         vscode.window.showInformationMessage(`Cleared ${deleted} cached entr${deleted === 1 ? "y" : "ies"} in total.`);
     }
+    // Prompts for environment credentials and writes them back into `.ss-manager.json`.
     async handleConfigureEnvironment(progress) {
         progress.report({ message: "Reading workspace folders..." });
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -272,17 +283,8 @@ class CommandHandler {
         if (!environment) {
             return;
         }
-        const configPath = path.join(workspaceFolder.uri.fsPath, ".ss-manager.json");
-        let config = {};
-        try {
-            const raw = await fs.promises.readFile(configPath, "utf-8");
-            config = JSON.parse(raw);
-        }
-        catch {
-            config = {};
-        }
-        const existing = config[environment] ?? {};
-        const isUpdate = Boolean(config[environment]);
+        const isUpdate = await ConfigService_1.default.environmentExists(environment);
+        const existing = isUpdate ? await ConfigService_1.default.getEnvironment(environment) : {};
         const fields = [
             { key: "CLIENT_ID", label: "Client ID", placeholder: "your-client-id", password: false },
             { key: "CLIENT_SECRET", label: "Client Secret", placeholder: "your-client-secret", password: true },
@@ -296,12 +298,19 @@ class CommandHandler {
                 password: false,
             },
         ];
-        const newValues = {};
+        const newValues = {
+            CLIENT_ID: existing.CLIENT_ID ?? "",
+            CLIENT_SECRET: existing.CLIENT_SECRET ?? "",
+            ACCESS_TOKEN: existing.ACCESS_TOKEN ?? "",
+            ACCESS_SECRET: existing.ACCESS_SECRET ?? "",
+            REALM: existing.REALM ?? "",
+            URL: existing.URL ?? "",
+        };
         for (const field of fields) {
             const value = await vscode.window.showInputBox({
                 title: `Configure "${environment}" - ${field.label}`,
                 prompt: field.label,
-                value: existing[field.key] ?? "",
+                value: newValues[field.key] ?? "",
                 placeHolder: field.placeholder,
                 password: field.password,
                 ignoreFocusOut: true,
@@ -313,10 +322,10 @@ class CommandHandler {
             }
             newValues[field.key] = value;
         }
-        config[environment] = newValues;
-        await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
+        await ConfigService_1.default.setEnvironment(environment, newValues);
         vscode.window.showInformationMessage(`${isUpdate ? "Updated" : "Created"} configuration for "${environment}".`);
     }
+    // Replaces the entire active document with the latest remote contents from NetSuite.
     async replaceActiveEditorContents(ctx) {
         const responseData = await (0, Request_1.request)(ctx.auth, "GET", {
             fileName: ctx.fileName,
@@ -332,6 +341,7 @@ class CommandHandler {
         workspaceEdit.replace(document.uri, fullRange, decoded);
         await vscode.workspace.applyEdit(workspaceEdit);
     }
+    // Builds a consistent cache scope so list/search/file data can be shared and invalidated predictably.
     getCacheScope(ctx, action, overrides = {}) {
         return {
             accountKey: this.getAccountKey(ctx),
@@ -342,16 +352,20 @@ class CommandHandler {
             searchId: overrides.searchId ?? "",
         };
     }
+    // Uses realm or URL as the stable account identifier for cache segmentation.
     getAccountKey(ctx) {
         const envConfig = ctx.config[ctx.environment];
         return envConfig.REALM || envConfig.URL || "default";
     }
+    // Includes the workspace path in cache keys so identical environments in different folders stay isolated.
     getWorkspaceKey() {
         return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
     }
+    // Tiny delay helper for smoother progress transitions and light throttling.
     async sleep(ms) {
         await new Promise((resolve) => setTimeout(resolve, ms));
     }
+    // Converts unknown thrown values into something safe to surface in VS Code.
     getErrorMessage(error) {
         if (error instanceof Error) {
             return error.message;

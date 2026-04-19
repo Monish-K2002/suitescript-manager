@@ -41,14 +41,11 @@ exports.deactivate = deactivate;
 const path = __importStar(require("node:path"));
 const vscode = __importStar(require("vscode"));
 const Handler_1 = __importDefault(require("./Handler"));
-const SyncStatusProvider_1 = __importDefault(require("./SyncStatusProvider"));
 let folderStatusBarItem;
 let handler;
+// Bootstraps the extension UI and wires every contributed command to the shared handler.
 function activate(context) {
     handler = new Handler_1.default(context);
-    const syncStatusProvider = new SyncStatusProvider_1.default(context);
-    const syncTreeView = vscode.window.createTreeView("suitescript-manager.syncStatus", { treeDataProvider: syncStatusProvider });
-    context.subscriptions.push(syncTreeView);
     folderStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     context.subscriptions.push(folderStatusBarItem);
     context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateStatusBar));
@@ -70,6 +67,7 @@ function activate(context) {
         context.subscriptions.push(vscode.commands.registerCommand(command.id, command.handler));
     });
 }
+// Derives the environment from the active file path and mirrors it in the status bar.
 function updateStatusBar(editor) {
     if (!editor || !folderStatusBarItem) {
         folderStatusBarItem?.hide();

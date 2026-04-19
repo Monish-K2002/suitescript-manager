@@ -1,38 +1,10 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
-
-import Ajv from "ajv";
 import * as vscode from "vscode";
-
 import { AuthService } from "./AuthService";
+import ConfigService from "./ConfigService";
 import type { ExtensionContextData, NetSuiteConfig } from "./types";
 
-const ajv = new Ajv();
-const configCache = new Map<string, { mtimeMs: number; config: NetSuiteConfig }>();
-
-const schema = {
-    type: "object",
-    patternProperties: {
-        ".*": {
-            type: "object",
-            properties: {
-                CLIENT_ID: { type: "string" },
-                CLIENT_SECRET: { type: "string" },
-                ACCESS_TOKEN: { type: "string" },
-                ACCESS_SECRET: { type: "string" },
-                REALM: { type: "string" },
-                URL: { type: "string" },
-            },
-            required: ["CLIENT_ID", "CLIENT_SECRET", "ACCESS_TOKEN", "ACCESS_SECRET", "REALM", "URL"],
-            additionalProperties: true,
-        },
-    },
-    additionalProperties: false,
-    minProperties: 1,
-} as const;
-
-const validate = ajv.compile(schema);
-
+// Reuses the single configured environment automatically, otherwise asks the user to choose one.
 async function pickEnvironment(config: NetSuiteConfig): Promise<string> {
     const environments = Object.keys(config);
 
@@ -55,34 +27,12 @@ async function pickEnvironment(config: NetSuiteConfig): Promise<string> {
     return selected;
 }
 
-async function loadConfig(): Promise<NetSuiteConfig | null> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-        return null;
-    }
-
-    const configPath = path.join(workspaceFolder.uri.fsPath, ".ss-manager.json");
-    if (!fs.existsSync(configPath)) {
-        return null;
-    }
-
-    const mtimeMs = (await fs.promises.stat(configPath)).mtimeMs;
-    const cached = configCache.get(configPath);
-    if (cached && cached.mtimeMs === mtimeMs) {
-        return cached.config;
-    }
-
-    const fileContent = await fs.promises.readFile(configPath, "utf-8");
-    const parsedConfig: unknown = JSON.parse(fileContent);
-    if (!validate(parsedConfig)) {
-        throw new Error(`Invalid config format: ${ajv.errorsText(validate.errors)}`);
-    }
-
-    const config = parsedConfig as NetSuiteConfig;
-    configCache.set(configPath, { mtimeMs, config });
-    return config;
+// Loads and validates the workspace config file, caching it until the file changes on disk.
+async function loadConfig(): Promise<NetSuiteConfig> {
+    return await ConfigService.loadConfig();
 }
 
+// Collects the active editor, environment, and auth details that command handlers depend on.
 export async function getContext(activeRequired = true, getProduction = false): Promise<ExtensionContextData> {
     const editor = vscode.window.activeTextEditor;
     if (activeRequired && !editor) {
@@ -95,9 +45,11 @@ export async function getContext(activeRequired = true, getProduction = false): 
         throw new Error("No workspace folder open");
     }
 
-    const config = await loadConfig();
-    if (!config) {
-        throw new Error(".ss-manager.json not found");
+    let config: NetSuiteConfig;
+    try {
+        config = await loadConfig();
+    } catch (error) {
+        throw new Error(".ss-manager.json not found or invalid");
     }
 
     const parts = filePath ? filePath.split(path.sep) : [];

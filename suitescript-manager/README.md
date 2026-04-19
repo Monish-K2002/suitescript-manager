@@ -156,11 +156,6 @@ npm test
 - `out/`: compiled extension output
 - `media/`: webview assets
 
-## Known Notes
-
-- `suitescript-manager.check-environment` is contributed but not currently registered in `extension.js`.
-- The extension assumes your folder layout uses environment as the first segment under workspace root.
-
 ## License
 
 No license file is currently included in this repository.

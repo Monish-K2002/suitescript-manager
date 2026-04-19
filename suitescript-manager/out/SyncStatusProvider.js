@@ -43,9 +43,11 @@ class SyncStatusProvider {
     constructor(context) {
         this.context = context;
     }
+    // Triggers a refresh when tree data may have changed.
     refresh() {
         this.onDidChangeTreeDataEmitter.fire();
     }
+    // Builds the tree item visuals for environment nodes and file nodes.
     getTreeItem(element) {
         if (element.type === "env") {
             const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Collapsed);
@@ -76,6 +78,7 @@ class SyncStatusProvider {
         }
         return item;
     }
+    // Returns top-level environments first, then files when a specific environment expands.
     async getChildren(element) {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
@@ -89,6 +92,7 @@ class SyncStatusProvider {
         }
         return [];
     }
+    // Merges filesystem folders and configured environments into one sorted root tree.
     async getEnvironmentNodes(workspaceFolder) {
         const excluded = new Set(["node_modules", "Backup", ".git", ".vscode", ".idea"]);
         const entries = await vscode.workspace.fs.readDirectory(workspaceFolder.uri);
@@ -106,6 +110,7 @@ class SyncStatusProvider {
             configured: configuredEnvs.includes(envName),
         }));
     }
+    // Lists JavaScript files inside one environment folder and annotates each with sync status.
     async getFileNodesForEnv(workspaceFolder, envName) {
         const pattern = new vscode.RelativePattern(workspaceFolder, `${envName}/**/*.js`);
         const files = await vscode.workspace.findFiles(pattern);
@@ -124,6 +129,7 @@ class SyncStatusProvider {
         }
         return nodes;
     }
+    // Reads the workspace configuration opportunistically so the tree can show configured environments.
     async loadConfig(workspacePath) {
         const configPath = path.join(workspacePath, ".ss-manager.json");
         try {
@@ -135,6 +141,7 @@ class SyncStatusProvider {
             return null;
         }
     }
+    // Compares the file mtime against the last successful push timestamp stored in global state.
     async getFileStatus(envName, relativePath, uri) {
         const key = `ssm:lastPush:${envName}:${relativePath}`;
         const lastPush = this.context.globalState.get(key);

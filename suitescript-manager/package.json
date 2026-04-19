@@ -1,7 +1,7 @@
 {
   "name": "suitescript-manager",
   "displayName": "suitescript-manager",
-  "description": "",
+  "description": "This extension helps you manage your SuiteScript projects in NetSuite from the ease of VS Code.",
   "version": "0.0.4",
   "engines": {
     "vscode": "^1.105.0"
@@ -34,10 +34,6 @@
       {
         "command": "suitescript-manager.pull-from-current-environment",
         "title": "Suitescript-Manager: Pull From Current Environment"
-      },
-      {
-        "command": "suitescript-manager.check-environment",
-        "title": "Suitescript-Manager: Check Environment"
       },
       {
         "command": "suitescript-manager.open-in-netsuite",

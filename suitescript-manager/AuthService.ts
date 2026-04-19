@@ -28,6 +28,7 @@ export class AuthService {
         });
     }
 
+    // Builds the signed request shape expected by the NetSuite RESTlet for both reads and writes.
     public getHeaders(params: RequestParams): AuthHeadersResult {
         const url = this.config.URL;
         const requestData: {

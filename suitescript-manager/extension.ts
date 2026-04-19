@@ -3,20 +3,13 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import CommandHandler from "./Handler";
-import SyncStatusProvider from "./SyncStatusProvider";
 
 let folderStatusBarItem: vscode.StatusBarItem | undefined;
 let handler: CommandHandler | undefined;
 
+// Bootstraps the extension UI and wires every contributed command to the shared handler.
 export function activate(context: vscode.ExtensionContext): void {
     handler = new CommandHandler(context);
-
-    const syncStatusProvider = new SyncStatusProvider(context);
-    const syncTreeView = vscode.window.createTreeView(
-        "suitescript-manager.syncStatus",
-        { treeDataProvider: syncStatusProvider },
-    );
-    context.subscriptions.push(syncTreeView);
 
     folderStatusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
@@ -50,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): void {
     });
 }
 
+// Derives the environment from the active file path and mirrors it in the status bar.
 function updateStatusBar(editor?: vscode.TextEditor): void {
     if (!editor || !folderStatusBarItem) {
         folderStatusBarItem?.hide();

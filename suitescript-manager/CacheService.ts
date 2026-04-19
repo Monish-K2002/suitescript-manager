@@ -11,6 +11,7 @@ class CacheService {
         this.globalState = globalState;
     }
 
+    // Returns a cached value when present, otherwise loads it and stores it with a TTL.
     public async getOrSet<T>(scope: CacheScope, ttlMs: number, loader: () => Promise<T>): Promise<T> {
         const cached = await this.get<T>(scope);
         if (cached !== undefined) {
@@ -22,6 +23,7 @@ class CacheService {
         return value;
     }
 
+    // Reads one cache entry and eagerly clears it if it has expired.
     public async get<T>(scope: CacheScope): Promise<T | undefined> {
         const key = this.buildKey(scope);
         const entry = this.globalState.get<CacheEntry<T>>(key);
@@ -37,6 +39,7 @@ class CacheService {
         return entry.value;
     }
 
+    // Persists a cache entry with metadata so expiration can be checked later.
     public async set<T>(scope: CacheScope, value: T, ttlMs: number): Promise<void> {
         const key = this.buildKey(scope);
         const now = Date.now();
@@ -48,6 +51,7 @@ class CacheService {
         } satisfies CacheEntry<T>);
     }
 
+    // Removes every cached entry that matches the provided partial scope.
     public async invalidate(partialScope: CacheScope = {}): Promise<number> {
         const fragments = this.buildFragments(partialScope);
         const keys = this.globalState.keys();
@@ -67,6 +71,7 @@ class CacheService {
         return candidates.length;
     }
 
+    // Normalizes each scope dimension into a stable key format.
     private buildKey(scope: CacheScope): string {
         const segments = {
             account: this.normalize(scope.accountKey),
@@ -80,6 +85,7 @@ class CacheService {
         return `${this.prefix}:account=${segments.account}:env=${segments.env}:ws=${segments.ws}:action=${segments.action}:file=${segments.file}:search=${segments.search}`;
     }
 
+    // Converts a partial scope into key fragments so invalidation can match subsets cheaply.
     private buildFragments(partialScope: CacheScope): string[] {
         const map: Record<keyof CacheScope, string> = {
             accountKey: "account",
@@ -95,6 +101,7 @@ class CacheService {
             .map(([sourceKey, targetKey]) => `:${targetKey}=${this.normalize(partialScope[sourceKey])}`);
     }
 
+    // Lowercases and URL-encodes values so cache keys stay predictable across environments.
     private normalize(value: unknown): string {
         return encodeURIComponent(String(value ?? "").toLowerCase());
     }
