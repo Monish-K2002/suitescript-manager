@@ -1,4 +1,3 @@
-```yaml
 name: CI
 
 on:
@@ -83,4 +82,4 @@ jobs:
           path: suitescript-manager/suitescript-manager.vsix
           if-no-files-found: error
           retention-days: 7
-```
+
